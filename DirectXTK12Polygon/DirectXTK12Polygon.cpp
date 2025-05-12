@@ -15,6 +15,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
 {
 
     // 三角形の頂点データ
+    
     DirectX::VertexPosition vertices[3] =
     {};
 
@@ -29,8 +30,11 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     vertices[2].position.x = -0.5f;
     vertices[2].position.y = -0.5f;
     vertices[2].position.z = 0.0f;
+    indices.resize(3);
 
-
+    indices[0] = 0;
+    indices[1] = 1;
+    indices[2] = 2;
     DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
 
     resourceUpload.Begin();
@@ -52,7 +56,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
             deviceResources->GetD3DDevice(),
             resourceUpload,
             indices.data(),
-            static_cast<int>(indices.size()),
+           indices.size(),
             sizeof(unsigned short),
             D3D12_RESOURCE_STATE_COMMON,
             m_indexBuffer.GetAddressOf()
@@ -63,13 +67,13 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     //(DirectXTK12Assimpで追加)
     m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition) * sizeof(vertices);
+    m_vertexBufferView.SizeInBytes =  sizeof(vertices);
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
+    m_indexBufferView.SizeInBytes =  sizeof(indices);
    
-
+    
 
     //定数バッファの作成(DIrectXTK12Assimpで追加)
 
@@ -90,10 +94,12 @@ void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
 
     resourceUpload.Begin();
+    /*
     if (vertices.empty() || indices.empty()) {
         OutputDebugStringA("Vertices or indices buffer is empty.\n");
         return;
     }
+    */
 
     auto commandList = DR->GetCommandList();
     auto renderTarget = DR->GetRenderTarget();
@@ -117,16 +123,16 @@ void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
     commandList->SetPipelineState(m_pipelineState.Get());
 
     // 描画コール
-   /* commandList->DrawIndexedInstanced(
+    commandList->DrawIndexedInstanced(
         static_cast<UINT>(indices.size()), // インデックス数
         1,                                 // インスタンス数
         0,                                 // 開始インデックス
         0,                                 // 頂点オフセット
         0                                  // インスタンスオフセット
     );
-    */
+    
 
-    commandList->DrawInstanced(1, 1, 0, 0);
+    
     auto uploadResourcesFinished = resourceUpload.End(
         DR->GetCommandQueue());
 
