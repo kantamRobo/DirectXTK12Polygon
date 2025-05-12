@@ -33,7 +33,8 @@ Game::~Game()
 void Game::Initialize(HWND window, int width, int height)
 {
     m_deviceResources->SetWindow(window, width, height);
-
+    m_height = height;
+    m_width = width;
     m_deviceResources->CreateDeviceResources();
     CreateDeviceDependentResources();
 
@@ -53,9 +54,9 @@ void Game::Initialize(HWND window, int width, int height)
 void Game::Tick()
 {
     m_timer.Tick([&]()
-    {
-        Update(m_timer);
-    });
+        {
+            Update(m_timer);
+        });
 
     Render();
 }
@@ -92,7 +93,7 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
-
+    m_model->Draw(m_deviceResources.get());
     PIXEndEvent(commandList);
 
     // Show the new frame.
@@ -201,9 +202,10 @@ void Game::CreateDeviceDependentResources()
     }
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+    m_model = std::make_unique<DirectXTK12Polygon>();
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
@@ -216,8 +218,8 @@ void Game::OnDeviceLost()
 {
     // TODO: Add Direct3D resource cleanup here.
 
-    // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory.reset();
+    //If using the DirectX Tool Kit for DX12, uncomment this line:
+    m_graphicsMemory.reset();
 }
 
 void Game::OnDeviceRestored()

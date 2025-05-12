@@ -1,3 +1,4 @@
+#include "pch.h"
 #include <ResourceUploadBatch.h>
 #include "DirectXTK12Polygon.h"
 #include <d3dcompiler.h>

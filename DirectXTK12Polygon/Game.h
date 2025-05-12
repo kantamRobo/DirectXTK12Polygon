@@ -6,7 +6,8 @@
 
 #include "DeviceResources.h"
 #include "StepTimer.h"
-
+#include "Model.h"
+#include <DirectXTK12Polygon.h>
 
 // A basic game implementation that creates a D3D12 device and
 // provides a game loop.
@@ -43,7 +44,7 @@ public:
     void OnWindowSizeChanged(int width, int height);
 
     // Properties
-    void GetDefaultSize( int& width, int& height ) const noexcept;
+    void GetDefaultSize(int& width, int& height) const noexcept;
 
 private:
 
@@ -51,16 +52,17 @@ private:
     void Render();
 
     void Clear();
-
+    int m_width = 0;
+    int m_height = 0;
     void CreateDeviceDependentResources();
     void CreateWindowSizeDependentResources();
 
     // Device resources.
     std::unique_ptr<DX::DeviceResources>        m_deviceResources;
-
+    std::unique_ptr<DirectXTK12Polygon> m_model;
     // Rendering loop timer.
     DX::StepTimer                               m_timer;
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
+    std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
 };
