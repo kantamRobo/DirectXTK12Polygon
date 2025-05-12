@@ -16,8 +16,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
 
     // 三角形の頂点データ
     
-    DirectX::VertexPosition vertices[3] =
-    {};
+    vertices.resize(3);
 
     vertices[0].position.x = 0.0f;
     vertices[0].position.y = 0.5f;
@@ -43,8 +42,8 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
         DirectX::CreateStaticBuffer(
             deviceResources->GetD3DDevice(),
             resourceUpload,
-            vertices,
-            static_cast<int>(sizeof(vertices)),
+            vertices.data(),
+            static_cast<int>(vertices.size()),
             sizeof(DirectX::VertexPosition),
             D3D12_RESOURCE_STATE_COMMON,
             m_vertexBuffer.GetAddressOf()
@@ -67,11 +66,11 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     //(DirectXTK12Assimpで追加)
     m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
-    m_vertexBufferView.SizeInBytes =  sizeof(vertices);
+    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition)*vertices.size();
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes =  sizeof(indices);
+    m_indexBufferView.SizeInBytes =  sizeof(unsigned short)*indices.size();
    
     
 
@@ -79,7 +78,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
-
+    m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"PixelShader.hlsl");
 
     // リソースのアップロードを終了
     auto uploadResourcesFinished = resourceUpload.End(deviceResources->GetCommandQueue());
@@ -264,7 +263,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
     // 
     D3D12_INPUT_LAYOUT_DESC inputlayaout = { m_layout.data(), m_layout.size() };
     DirectX::EffectPipelineStateDescription pd(
-        &DirectX::VertexPosition::InputLayout,
+        &inputlayaout,
         DirectX::CommonStates::Opaque,
         DirectX::CommonStates::DepthDefault,
         DirectX::CommonStates::CullCounterClockwise,
