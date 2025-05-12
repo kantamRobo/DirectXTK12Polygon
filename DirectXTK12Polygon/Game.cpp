@@ -100,7 +100,7 @@ void Game::Render()
     m_deviceResources->Present();
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
+    m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
 
     PIXEndEvent();
 }
