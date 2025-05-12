@@ -62,8 +62,8 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
 
     //(DirectXTK12Assimp‚Å’Ç‰Á)
     m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionColor);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionColor) * sizeof(vertices);
+    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
+    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition) * sizeof(vertices);
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
