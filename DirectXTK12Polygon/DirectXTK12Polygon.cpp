@@ -93,12 +93,12 @@ void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
 
     resourceUpload.Begin();
-    /*
+    
     if (vertices.empty() || indices.empty()) {
         OutputDebugStringA("Vertices or indices buffer is empty.\n");
         return;
     }
-    */
+    
 
     auto commandList = DR->GetCommandList();
     auto renderTarget = DR->GetRenderTarget();
