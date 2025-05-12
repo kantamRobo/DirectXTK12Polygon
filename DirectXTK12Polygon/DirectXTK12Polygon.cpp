@@ -13,6 +13,24 @@ enum Descriptors
 };
 HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
 {
+
+    // 三角形の頂点データ
+    DirectX::VertexPosition vertices[3] =
+    {};
+
+    vertices[0].position.x = 0.0f;
+    vertices[0].position.y = 0.5f;
+    vertices[0].position.z = 0.0f;
+
+    vertices[1].position.x = 0.5f;
+    vertices[1].position.y = -0.5f;
+    vertices[1].position.z = 0.0f;
+
+    vertices[2].position.x = -0.5f;
+    vertices[2].position.y = -0.5f;
+    vertices[2].position.z = 0.0f;
+
+
     DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
 
     resourceUpload.Begin();
@@ -21,9 +39,9 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
         DirectX::CreateStaticBuffer(
             deviceResources->GetD3DDevice(),
             resourceUpload,
-            vertices.data(),
-            static_cast<int>(vertices.size()),
-            sizeof(DirectX::VertexPositionNormalColorTexture),
+            vertices,
+            static_cast<int>(sizeof(vertices)),
+            sizeof(DirectX::VertexPosition),
             D3D12_RESOURCE_STATE_COMMON,
             m_vertexBuffer.GetAddressOf()
         )
@@ -45,7 +63,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     //(DirectXTK12Assimpで追加)
     m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionColor);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionColor) * vertices.size();
+    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionColor) * sizeof(vertices);
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
@@ -99,13 +117,16 @@ void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
     commandList->SetPipelineState(m_pipelineState.Get());
 
     // 描画コール
-    commandList->DrawIndexedInstanced(
+   /* commandList->DrawIndexedInstanced(
         static_cast<UINT>(indices.size()), // インデックス数
         1,                                 // インスタンス数
         0,                                 // 開始インデックス
         0,                                 // 頂点オフセット
         0                                  // インスタンスオフセット
     );
+    */
+
+    commandList->DrawInstanced(1, 1, 0, 0);
     auto uploadResourcesFinished = resourceUpload.End(
         DR->GetCommandQueue());
 
@@ -167,7 +188,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
     // 入力レイアウトを定義
     m_layout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    
            };
 
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -237,7 +258,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
     // 
     D3D12_INPUT_LAYOUT_DESC inputlayaout = { m_layout.data(), m_layout.size() };
     DirectX::EffectPipelineStateDescription pd(
-        &inputlayaout,
+        &DirectX::VertexPosition::InputLayout,
         DirectX::CommonStates::Opaque,
         DirectX::CommonStates::DepthDefault,
         DirectX::CommonStates::CullCounterClockwise,

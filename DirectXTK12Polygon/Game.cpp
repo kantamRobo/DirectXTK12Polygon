@@ -206,6 +206,8 @@ void Game::CreateDeviceDependentResources()
 
     // TODO: Initialize device dependent objects here (independent of window size).
     m_model = std::make_unique<DirectXTK12Polygon>();
+
+    m_model->CreateBuffer(m_graphicsMemory.get(), m_deviceResources.get(), m_height, m_width);
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
