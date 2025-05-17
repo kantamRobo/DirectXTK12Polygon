@@ -318,6 +318,8 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonScene::CreateGraph
     D3D12_SHADER_BYTECODE pixelShaderBCode = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
     // パイプラインステートオブジェクトを作成
     ComPtr<ID3D12PipelineState> pipelineState;
+    
+    
     pd.CreatePipelineState(
         deviceresources->GetD3DDevice(),
         m_rootSignature.Get(),
