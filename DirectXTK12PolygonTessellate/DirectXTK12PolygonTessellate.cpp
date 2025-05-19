@@ -207,11 +207,13 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTessellate::Create
     const std::wstring& vertexShaderPath,
     const std::wstring& pixelShaderPath)
 {
-   
+
     auto device = deviceresources->GetD3DDevice();
     // シェーダーをコンパイル
     ComPtr<ID3DBlob> vertexShader;
     ComPtr<ID3DBlob> pixelShader;
+    ComPtr<ID3DBlob> hullShader;
+    ComPtr<ID3DBlob> domainShader;
     ComPtr<ID3DBlob> errorBlob;
     DirectX::RenderTargetState rtState(DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
     HRESULT hr = D3DCompileFromFile(
@@ -245,12 +247,17 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTessellate::Create
         &errorBlob
     );
 
-    if (FAILED(hr)) {
-        if (errorBlob) {
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile pixel shader");
+
+
+    hr = D3DCompileFromFile(L"HullShader.hlsl", nullptr, nullptr,
+        "main", "hs_5_0", 0, 0, &hullShader, &errorBlob);
+    hr = D3DCompileFromFile(L"DomainShader.hlsl", nullptr, nullptr,
+        "main", "ds_5_0", 0, 0, &domainShader, &errorBlob);
+    if (errorBlob) {
+        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
     }
+    throw std::runtime_error("Failed to compile pixel shader");
+};
 
     // 入力レイアウトを定義
     m_layout = {
