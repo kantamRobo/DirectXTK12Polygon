@@ -257,7 +257,6 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTessellate::Create
         OutputDebugStringA((char*)errorBlob->GetBufferPointer());
     }
     throw std::runtime_error("Failed to compile pixel shader");
-};
 
     // 入力レイアウトを定義
     m_layout = {
