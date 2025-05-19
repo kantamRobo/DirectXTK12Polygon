@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonScene", "
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonMeshshader", "DirectXTK12PolygonMeshshader\DirectXTK12PolygonMeshshader.vcxproj", "{DAC3F9FE-8D2B-4257-8982-1BADD590E8DE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonTessellate", "DirectXTK12PolygonTessellate\DirectXTK12PolygonTessellate.vcxproj", "{B9B6D769-1DB9-4D06-B674-BBD8205666D6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +43,14 @@ Global
 		{DAC3F9FE-8D2B-4257-8982-1BADD590E8DE}.Release|x64.Build.0 = Release|x64
 		{DAC3F9FE-8D2B-4257-8982-1BADD590E8DE}.Release|x86.ActiveCfg = Release|Win32
 		{DAC3F9FE-8D2B-4257-8982-1BADD590E8DE}.Release|x86.Build.0 = Release|Win32
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Debug|x64.ActiveCfg = Debug|x64
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Debug|x64.Build.0 = Debug|x64
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Debug|x86.ActiveCfg = Debug|Win32
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Debug|x86.Build.0 = Debug|Win32
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Release|x64.ActiveCfg = Release|x64
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Release|x64.Build.0 = Release|x64
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Release|x86.ActiveCfg = Release|Win32
+		{B9B6D769-1DB9-4D06-B674-BBD8205666D6}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
