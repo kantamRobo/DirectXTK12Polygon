@@ -4,21 +4,24 @@
 
 #include "pch.h"
 #include "Game.h"
-
+#include <DescriptorHeap.h>
+#include "DirectXTK12PolygonTessellate.h"
 extern void ExitGame() noexcept;
 
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
-
+DirectXTK12PolygonTessellate tes;
 Game::Game() noexcept(false)
 {
     m_deviceResources = std::make_unique<DX::DeviceResources>();
+   
     // TODO: Provide parameters for swapchain format, depth/stencil format, and backbuffer count.
     //   Add DX::DeviceResources::c_AllowTearing to opt-in to variable rate displays.
     //   Add DX::DeviceResources::c_EnableHDR for HDR10 display.
     //   Add DX::DeviceResources::c_ReverseDepth to optimize depth buffer clears for 0 instead of 1.
     m_deviceResources->RegisterDeviceNotify(this);
+   
 }
 
 Game::~Game()
@@ -92,7 +95,7 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
-
+    tes.Draw(m_deviceResources.get());
     PIXEndEvent(commandList);
 
     // Show the new frame.
@@ -100,7 +103,7 @@ void Game::Render()
     m_deviceResources->Present();
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
+    m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
 
     PIXEndEvent();
 }
@@ -204,6 +207,12 @@ void Game::CreateDeviceDependentResources()
     // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+    
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+   
+    tes.CreateBuffer(m_graphicsMemory.get(), m_deviceResources.get(), 600, 1200);
+   
+
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
@@ -217,7 +226,7 @@ void Game::OnDeviceLost()
     // TODO: Add Direct3D resource cleanup here.
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory.reset();
+    m_graphicsMemory.reset();
 }
 
 void Game::OnDeviceRestored()

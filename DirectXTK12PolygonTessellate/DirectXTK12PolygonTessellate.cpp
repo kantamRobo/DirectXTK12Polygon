@@ -1,6 +1,6 @@
 #include "pch.h"
 
-#include <ResourceUploadBatch.h>
+
 #include "DirectXTK12PolygonTessellate.h"
 
 
@@ -12,46 +12,12 @@
 
 
 
-
-
-
-
-#include <DirectXMath.h>
-#include "pch.h"
-
-#include <d3dcompiler.h>
-#include <d3dx12.h>
-
-enum Descriptors
-{
-    WindowsLogo,
-    CourierFont,
-    ControllerFont,
-    GamerPic,
-    Count
-};
-
-
-struct SceneCB {
-    DirectX::XMFLOAT4X4 world;
-    DirectX::XMFLOAT4X4 view;
-    DirectX::XMFLOAT4X4 projection;
-};
-// Create root signature.
-enum RootParameterIndex
-{
-    ConstantBuffer,
-    TextureSRV,
-    TextureSampler,
-    RootParameterCount
-};
-
-
 using namespace DirectX;
+
 HRESULT DirectXTK12PolygonTessellate::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
 {
     auto device = deviceResources->GetD3DDevice();
-    graphicsMemory = std::make_unique<GraphicsMemory>(device);
+    
     // 三角形の頂点データ
 
     vertices.resize(3);
@@ -77,32 +43,6 @@ HRESULT DirectXTK12PolygonTessellate::CreateBuffer(DirectX::GraphicsMemory* grap
     resourceUpload.Begin();
     // 頂点バッファの作成
 
-    SceneCB scenecb;
-    m_vertexBuffer = graphicsMemory->Allocate(sizeof(DirectX::VertexPosition) * vertices.size());
-    memcpy(m_vertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
-
-    m_indexBuffer = graphicsMemory->Allocate(sizeof(DirectX::VertexPosition) * vertices.size());
-    memcpy(m_vertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
-
-    SceneCBResource = graphicsMemory->Allocate(sizeof(SceneCB));
-    memcpy(SceneCBResource.Memory(), &scenecb, sizeof(scenecb));
-    TessCB tesscb;
-    TessCBResource = graphicsMemory->Allocate(sizeof(TessCB));
-    memcpy(TessCBResource.Memory(), &tesscb, sizeof(tesscb));
-    m_indexBuffer = graphicsMemory->Allocate(sizeof(unsigned short) * indices.size());
-    memcpy(m_indexBuffer.Memory(), indices.data(), sizeof(unsigned short) * indices.size());
-
-    //(DirectXTK12Assimpで追加)
-    m_vertexBufferView.BufferLocation = m_vertexBuffer.GpuAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition) * vertices.size();
-
-    m_indexBufferView.BufferLocation = m_indexBuffer.GpuAddress();
-    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
-
-
-
     DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 
     DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
@@ -116,22 +56,45 @@ HRESULT DirectXTK12PolygonTessellate::CreateBuffer(DirectX::GraphicsMemory* grap
     float    farZ = 100.0f;
     DirectX::XMMATRIX projMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
 
-    SceneCB cb;
-    XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
-    XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
-    XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
+    SceneCB scenecb = {};
+    XMStoreFloat4x4(&scenecb.world, XMMatrixTranspose(worldMatrix));
+    XMStoreFloat4x4(&scenecb.view, XMMatrixTranspose(viewMatrix));
+    XMStoreFloat4x4(&scenecb.projection, XMMatrixTranspose(projMatrix));
 
 
 
+    m_vertexBuffer = graphicsmemory->Allocate(sizeof(DirectX::VertexPosition) * vertices.size());
+    memcpy(m_vertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
+
+    // インデックスバッファ
+    m_indexBuffer = graphicsmemory->Allocate(sizeof(unsigned short) * indices.size());
+    memcpy(m_indexBuffer.Memory(), indices.data(), sizeof(unsigned short) * indices.size());
+    SceneCBResource = graphicsmemory->AllocateConstant(sizeof(SceneCB));
+    memcpy(SceneCBResource.Memory(), &scenecb, sizeof(scenecb));
+    TessCB tesscb = {};
+    tesscb.Inner = 1.0f;
+    tesscb.Outer = 1.0f;
+    TessCBResource = graphicsmemory->AllocateConstant(sizeof(TessCB));
+    memcpy(TessCBResource.Memory(), &tesscb, sizeof(tesscb));
+   
+    //(DirectXTK12Assimpで追加)
+    m_vertexBufferView.BufferLocation = m_vertexBuffer.GpuAddress();
+    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
+    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition) * vertices.size();
+
+    m_indexBufferView.BufferLocation = m_indexBuffer.GpuAddress();
+    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
+    m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
+
+
+
+    
     //定数バッファの作成(DIrectXTK12Assimpで追加)
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
-    TessCB tesscb;
-    SceneCBResource = graphicsmemory->AllocateConstant(cb);
-    TessCBResource = graphicsmemory->AllocateConstant(tesscb);
-
-
+   
+  
 
     //定数バッファの作成(DIrectXTK12Assimpで追加)
 
@@ -169,7 +132,7 @@ void DirectXTK12PolygonTessellate::Draw(const DX::DeviceResources* DR) {
     // 入力アセンブラー設定
     commandList->IASetIndexBuffer(&m_indexBufferView);
     commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    commandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_11_CONTROL_POINT_PATCHLIST);
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
 
 
 
@@ -177,9 +140,10 @@ void DirectXTK12PolygonTessellate::Draw(const DX::DeviceResources* DR) {
     commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
     //2024/12/30/9:42
-    commandList->SetGraphicsRootConstantBufferView(0, SceneCBResource.GpuAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, TessCBResource.GpuAddress());
+    commandList->SetGraphicsRootConstantBufferView(SCENECBINDEX, SceneCBResource.GpuAddress());
 
+
+    commandList->SetGraphicsRootConstantBufferView(TESSCBINDEX, TessCBResource.GpuAddress());
 
 
     // パイプラインステート設定
@@ -255,8 +219,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTessellate::Create
         "main", "ds_5_0", 0, 0, &domainShader, &errorBlob);
     if (errorBlob) {
         OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        throw std::runtime_error("Failed to compile pixel shader");
     }
-    throw std::runtime_error("Failed to compile pixel shader");
+   
 
     // 入力レイアウトを定義
     m_layout = {
@@ -266,24 +231,37 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTessellate::Create
 
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS 
+        ;
     // Create root parameters and initialize first (constants)
-    CD3DX12_ROOT_PARAMETER rootParameters[1] = {};
-    rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0); 
+    CD3DX12_DESCRIPTOR_RANGE descrange[2] = {};
+  
+    descrange[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+    descrange[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
+    CD3DX12_ROOT_PARAMETER rootParameters[2] = {};
+    // SceneCB (b0)
+    rootParameters[SCENECBINDEX].InitAsConstantBufferView(
+        /* ShaderRegister */ 0,
+        /* RegisterSpace */ 0,
+        D3D12_SHADER_VISIBILITY_ALL
+    );
 
-        rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(1);
+    // TessCB (b1)
+    rootParameters[TESSCBINDEX].InitAsConstantBufferView(
+        /* ShaderRegister */ 1,
+        /* RegisterSpace */ 0,
+        D3D12_SHADER_VISIBILITY_ALL
+    );
 
+    // ルートシグネチャ作成
+    CD3DX12_ROOT_SIGNATURE_DESC rsigDesc(
+        /* NumParameters */ 2,
+        /* pParameters   */ rootParameters,
+        0, nullptr,
+        rootSignatureFlags
+    );
 
-
-        // Root parameter descriptor
-        CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
-
-    // use all parameters
-    rsigDesc.Init(static_cast<UINT>(std::size(rootParameters)), rootParameters, 0, nullptr, rootSignatureFlags);
-
+    
     DX::ThrowIfFailed(DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf()));
     /*
     // ラスタライザーステート
@@ -353,15 +331,16 @@ https://github.com/Microsoft/DirectXTK12/wiki/EffectPipelineStateDescription
     D3D12_SHADER_BYTECODE pixelShaderBCode = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
 
 
-    D3D12_SHADER_BYTECODE HullShaderBCode = { HullShader->GetBufferPointer(), HullShader->GetBufferSize() };
+    D3D12_SHADER_BYTECODE HullShaderBCode = { hullShader->GetBufferPointer(), hullShader->GetBufferSize() };
 
-    D3D12_SHADER_BYTECODE DomainShaderBCode = { DomainShader->GetBufferPointer(), DomainShader->GetBufferSize() };
+    D3D12_SHADER_BYTECODE DomainShaderBCode = { domainShader->GetBufferPointer(), domainShader->GetBufferSize() };
 
     patchpd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
     patchpd.VS = vertexshaderBCode;
     patchpd.PS = pixelShaderBCode;
     patchpd.HS = HullShaderBCode;
     patchpd.DS = DomainShaderBCode;
+    patchpd.pRootSignature = m_rootSignature.Get();
     // パイプラインステートオブジェクトを作成
     ComPtr<ID3D12PipelineState> pipelineState;
     

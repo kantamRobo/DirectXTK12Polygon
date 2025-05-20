@@ -1,31 +1,29 @@
-struct DS_OUTPUT
+
+// DS: バリセンタリック補間
+struct DSOut
 {
-	float4 vPosition  : SV_POSITION;
+    float4 Pos : SV_POSITION;
+};
+// HS: 3 control-point patch を受け取り、出力制御点とパッチ定数を生成
+struct HSOut
+{
+    float3 Pos : POSITION;
 };
 
-struct HS_CONTROL_POINT_OUTPUT
+struct HSConst
 {
-	float3 vPosition : WORLDPOS; 
+    float EdgeTess[3] : SV_TessFactor; // 外周
+    float InsideTess : SV_InsideTessFactor; // 内部
 };
-
-struct HS_CONSTANT_DATA_OUTPUT
-{
-	float EdgeTessFactor[3]			: SV_TessFactor;
-	float InsideTessFactor			: SV_InsideTessFactor;
-};
-
-#define NUM_CONTROL_POINTS 3
 
 [domain("tri")]
-DS_OUTPUT main(
-	HS_CONSTANT_DATA_OUTPUT input,
-	float3 domain : SV_DomainLocation,
-	const OutputPatch<HS_CONTROL_POINT_OUTPUT, NUM_CONTROL_POINTS> patch)
+DSOut main(HSConst hc, const OutputPatch<HSOut, 3> patch, float3 bary : SV_DomainLocation)
 {
-	DS_OUTPUT Output;
-
-	Output.vPosition = float4(
-		patch[0].vPosition*domain.x+patch[1].vPosition*domain.y+patch[2].vPosition*domain.z,1);
-
-	return Output;
+    DSOut o;
+    float3 p = patch[0].Pos * bary.x
+        + patch[1].Pos * bary.y
+        + patch[2].Pos * bary.z;
+    // そのままクリップ空間と仮定（射影行列などは省略）
+    o.Pos = float4(p, 1.0f);
+    return o;
 }

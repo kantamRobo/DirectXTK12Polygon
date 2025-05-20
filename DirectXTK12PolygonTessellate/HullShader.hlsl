@@ -1,48 +1,45 @@
-struct VS_CONTROL_POINT_OUTPUT
+
+cbuffer TessFactorBuffer : register(b1)
 {
-	float3 vPosition : WORLDPOS;
+    float Inner; // SV_InsideTessFactor に対応
+    float Outer; // SV_TessFactor に対応（3 要素すべてに同じ値を流す想定）
+};
+// HS: 3 control-point patch を受け取り、出力制御点とパッチ定数を生成
+struct HSOut
+{
+    float3 Pos : POSITION;
 };
 
-struct HS_CONTROL_POINT_OUTPUT
+struct HSConst
 {
-	float3 vPosition : WORLDPOS; 
+    float EdgeTess[3] : SV_TessFactor; // 外周
+    float InsideTess : SV_InsideTessFactor; // 内部
 };
 
-struct HS_CONSTANT_DATA_OUTPUT
+// VS: 単に入力頂点を次へ渡す
+struct VSOut
 {
-	float EdgeTessFactor[3]			: SV_TessFactor;
-	float InsideTessFactor			: SV_InsideTessFactor;
+    float4 Pos : SV_POSITION; // VS が出力する SV_POSITION に合わせる
 };
-
-#define NUM_CONTROL_POINTS 3
-
-HS_CONSTANT_DATA_OUTPUT CalcHSPatchConstants(
-	InputPatch<VS_CONTROL_POINT_OUTPUT, NUM_CONTROL_POINTS> ip,
-	uint PatchID : SV_PrimitiveID)
-{
-	HS_CONSTANT_DATA_OUTPUT Output;
-
-	Output.EdgeTessFactor[0] = 
-		Output.EdgeTessFactor[1] = 
-		Output.EdgeTessFactor[2] = 
-		Output.InsideTessFactor = 15;
-
-	return Output;
-}
 
 [domain("tri")]
 [partitioning("fractional_odd")]
 [outputtopology("triangle_cw")]
 [outputcontrolpoints(3)]
-[patchconstantfunc("CalcHSPatchConstants")]
-HS_CONTROL_POINT_OUTPUT main( 
-	InputPatch<VS_CONTROL_POINT_OUTPUT, NUM_CONTROL_POINTS> ip, 
-	uint i : SV_OutputControlPointID,
-	uint PatchID : SV_PrimitiveID )
+[patchconstantfunc("HSConstFunc")]
+HSOut main(InputPatch<VSOut, 3> patch, uint cid : SV_OutputControlPointID)
 {
-	HS_CONTROL_POINT_OUTPUT Output;
+    HSOut o;
+    o.Pos = patch[cid].Pos;
+    return o;
+}
 
-	Output.vPosition = ip[i].vPosition;
-
-	return Output;
+HSConst HSConstFunc(InputPatch<VSOut, 3> patch)
+{
+    HSConst o;
+    o.EdgeTess[0] = Outer;
+    o.EdgeTess[1] = Outer;
+    o.EdgeTess[2] = Outer;
+    o.InsideTess = Inner;
+    return o;
 }
