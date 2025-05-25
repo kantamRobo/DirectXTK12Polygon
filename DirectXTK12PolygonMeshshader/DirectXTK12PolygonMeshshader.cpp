@@ -312,6 +312,31 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader
         DirectX::CommonStates::DepthDefault,
         DirectX::CommonStates::CullCounterClockwise,
         rtState);
+  
+
+    D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc = {};
+    meshDesc.pRootSignature = m_rootSignature.Get();
+    // meshDesc.AS = { ... };
+    // meshDesc.MS = { ... };
+    // meshDesc.PS = { ... };
+    meshDesc.BlendState = pd.blendDesc;
+    meshDesc.SampleMask = pd.renderTargetState.sampleMask;
+    meshDesc.RasterizerState = pd.rasterizerDesc;
+    meshDesc.DepthStencilState = pd.depthStencilDesc;
+   
+    meshDesc.PrimitiveTopologyType = pd.primitiveTopology;
+    meshDesc.NumRenderTargets = pd.renderTargetState.numRenderTargets;
+    memcpy_s(meshDesc.RTVFormats, sizeof(meshDesc.RTVFormats), pd.renderTargetState.rtvFormats, sizeof(DXGI_FORMAT) * D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT);
+    meshDesc.DSVFormat = pd.renderTargetState.dsvFormat;
+    meshDesc.SampleDesc = pd.renderTargetState.sampleDesc;
+    meshDesc.NodeMask = pd.renderTargetState.nodeMask;
+
+    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
+    streamDesc.SizeInBytes = sizeof(meshDesc);
+    streamDesc.pPipelineStateSubobjectStream = &meshDesc;
+
+    DX::ThrowIfFailed((&streamDesc, IID_PPV_ARGS(&pso)));
+    
     D3D12_SHADER_BYTECODE vertexshaderBCode = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
 
 
