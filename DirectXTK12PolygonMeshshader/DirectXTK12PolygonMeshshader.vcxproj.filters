@@ -22,6 +22,7 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="DirectXTK12PolygonMeshshader.h" />
+    <ClInclude Include="DeviceResourcesMod.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -31,6 +32,7 @@
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="DirectXTK12PolygonMeshshader.cpp" />
+    <ClCompile Include="DeviceResourcesMod.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc" />
