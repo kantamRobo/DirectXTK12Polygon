@@ -50,4 +50,8 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="SimpleTriangleMS.hlsl" />
+    <FxCompile Include="SimpleTrianglePS.hlsl" />
+  </ItemGroup>
 </Project>
