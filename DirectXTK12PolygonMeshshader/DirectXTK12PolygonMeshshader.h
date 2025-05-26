@@ -1,5 +1,6 @@
 ﻿#pragma once
-#include <DeviceResources.h>
+
+#include "DeviceResourcesMod.h"
 struct SceneCB {
 	DirectX::XMFLOAT4X4 world;
 	DirectX::XMFLOAT4X4 view;
@@ -21,14 +22,14 @@ class DirectXTK12MeshShader
 
 
 public:
-	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width);
+	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width);
 
 
 	std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPipelineState(DX::DeviceResources* deviceresources, const std::wstring& vertexShaderPath, const std::wstring& pixelShaderPath);
-	void CreateDescriptors(DX::DeviceResources* DR);
-	void Draw(const DX::DeviceResources* DR);
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPipelineState(DX::DeviceResourcesMod* deviceresources, const std::wstring& vertexShaderPath, const std::wstring& pixelShaderPath);
+	void CreateDescriptors(DX::DeviceResourcesMod* DR);
+	void Draw(const DX::DeviceResourcesMod* DR);
 
 
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;

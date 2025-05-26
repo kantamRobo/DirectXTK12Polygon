@@ -13,9 +13,7 @@
 
 
 
-
 #include <DirectXMath.h>
-#include "pch.h"
 #include <ResourceUploadBatch.h>
 #include <d3dcompiler.h>
 #include <d3dx12.h>
@@ -28,7 +26,7 @@ enum Descriptors
     Count
 };
 using namespace DirectX;
-HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
+HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
 {
 
     // �O�p�`�̒��_�f�[�^
@@ -131,7 +129,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 
 
 //(DIrectXTK12Assimp�Œǉ�)
-void DirectXTK12MeshShader::Draw(const DX::DeviceResources* DR) {
+void DirectXTK12MeshShader::Draw(const DX::DeviceResourcesMod* DR) {
 
 
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
@@ -183,11 +181,12 @@ using Microsoft::WRL::ComPtr;
 // �O���t�B�b�N�p�C�v���C���X�e�[�g���쐬����֐�
 Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader
     ::CreateGraphicsPipelineState(
-    DX::DeviceResources* deviceresources,
+    DX::DeviceResourcesMod* deviceresources,
 
     const std::wstring& vertexShaderPath,
     const std::wstring& pixelShaderPath)
 {
+    auto device = deviceresources->GetD3DDevice();
     // �V�F�[�_�[���R���p�C��
     ComPtr<ID3DBlob> vertexShader;
     ComPtr<ID3DBlob> pixelShader;
@@ -334,25 +333,17 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.SizeInBytes = sizeof(meshDesc);
     streamDesc.pPipelineStateSubobjectStream = &meshDesc;
-
-    DX::ThrowIfFailed((&streamDesc, IID_PPV_ARGS(&pso)));
+    ComPtr<ID3D12PipelineState> pipelineState;
+    DX::ThrowIfFailed(device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipelineState)));
     
     D3D12_SHADER_BYTECODE vertexshaderBCode = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
 
 
     D3D12_SHADER_BYTECODE pixelShaderBCode = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
     // �p�C�v���C���X�e�[�g�I�u�W�F�N�g���쐬
-    ComPtr<ID3D12PipelineState> pipelineState;
+   
 
-    pd.CreatePipelineState(
-        deviceresources->GetD3DDevice(),
-        m_rootSignature.Get(),
-        vertexshaderBCode,
-
-        pixelShaderBCode,
-
-        pipelineState.GetAddressOf()
-    );
+    
     if (FAILED(hr)) {
         throw std::runtime_error("Failed to create pipeline state");
     }
