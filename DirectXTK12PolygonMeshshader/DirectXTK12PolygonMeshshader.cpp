@@ -12,11 +12,12 @@
 
 
 
-
+#include <dxcapi.h>    // ← DXC API
 #include <DirectXMath.h>
 #include <ResourceUploadBatch.h>
 #include <d3dcompiler.h>
 #include <d3dx12.h>
+
 enum Descriptors
 {
     WindowsLogo,
@@ -26,6 +27,23 @@ enum Descriptors
     Count
 };
 using namespace DirectX;
+
+//-----------------------------------------------------------------------------
+// ヘルパー: DXC の初期化（ライブラリ・コンパイラ・インクルードハンドラ）
+//-----------------------------------------------------------------------------
+void DirectXTK12MeshShader::InitializeDXC()
+{
+    if (m_dxcLibrary)
+        return; // すでに初期化済み
+
+    // ライブラリとコンパイラの生成
+    DX::ThrowIfFailed(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&m_dxcLibrary)));
+    DX::ThrowIfFailed(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&m_dxcCompiler)));
+
+    // デフォルトのインクルードハンドラ
+    DX::ThrowIfFailed(m_dxcLibrary->CreateIncludeHandler(&m_dxcIncludeHandler));
+}
+
 HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
 {
 
@@ -120,7 +138,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
-    m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"PixelShader.hlsl");
+    m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"PixelShader", L"MeshShader");
 
     // ���\�[�X�̃A�b�v���[�h���I��
     auto uploadResourcesFinished = resourceUpload.End(deviceResources->GetCommandQueue());
@@ -177,155 +195,61 @@ void DirectXTK12MeshShader::Draw(const DX::DeviceResourcesMod* DR) {
     uploadResourcesFinished.wait();
 }
 using Microsoft::WRL::ComPtr;
-//(DIrectXTK12Assimp�Œǉ�)
-// �O���t�B�b�N�p�C�v���C���X�e�[�g���쐬����֐�
-Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader
-    ::CreateGraphicsPipelineState(
-    DX::DeviceResourcesMod* deviceresources,
-
-    const std::wstring& vertexShaderPath,
-    const std::wstring& pixelShaderPath)
+Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphicsPipelineState(
+    DX::DeviceResourcesMod* devResources,
+    const std::wstring& vsPath,
+    const std::wstring& psPath,
+    const std::wstring& msPath)
 {
-    auto device = deviceresources->GetD3DDevice();
-    // �V�F�[�_�[���R���p�C��
-    ComPtr<ID3DBlob> vertexShader;
-    ComPtr<ID3DBlob> pixelShader;
-    ComPtr<ID3DBlob> errorBlob;
-    DirectX::RenderTargetState rtState(DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
-    HRESULT hr = D3DCompileFromFile(
-        vertexShaderPath.c_str(),
-        nullptr,
-        nullptr,
-        "main", // �G���g���[�|�C���g
-        "vs_5_0", // �V�F�[�_�[���f��
-        0,
-        0,
-        &vertexShader,
-        &errorBlob
-    );
+    auto device = devResources->GetD3DDevice();
 
-    if (FAILED(hr)) {
-        if (errorBlob) {
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile vertex shader");
-    }
+    // 1) DXC の初期化
+    InitializeDXC();
 
-    hr = D3DCompileFromFile(
-        pixelShaderPath.c_str(),
-        nullptr,
-        nullptr,
-        "main",
-        "ps_5_0",
-        0,
-        0,
-        &pixelShader,
-        &errorBlob
-    );
+    // 2) 各シェーダーをコンパイル
+    auto vsBlob = CompileShaderDXC(
+        m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
+        vsPath, L"main", L"vs_6_0");
 
-    if (FAILED(hr)) {
-        if (errorBlob) {
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile pixel shader");
-    }
+    auto psBlob = CompileShaderDXC(
+        m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
+        psPath, L"main", L"ps_6_0");
 
-    // ���̓��C�A�E�g���`
-    m_layout = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    };
+    auto msBlob = CompileShaderDXC(
+        m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
+        msPath, L"main", L"ms_6_5");
 
-    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+    // 3) 既存のルートシグネチャ／レイアウト設定は省略（元のコードを流用）
 
-    // Create root parameters and initialize first (constants)
-    CD3DX12_ROOT_PARAMETER rootParameters[1] = {};
-    rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    // --- 例: 共通の EffectPipelineStateDescription を再利用 ---
+    DirectX::RenderTargetState rtState(
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        DXGI_FORMAT_D32_FLOAT);
 
-    // Root parameter descriptor
-    CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
-
-    // use all parameters
-    rsigDesc.Init(static_cast<UINT>(std::size(rootParameters)), rootParameters, 0, nullptr, rootSignatureFlags);
-
-    DX::ThrowIfFailed(DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf()));
-    /*
-    // ���X�^���C�U�[�X�e�[�g
-    D3D12_RASTERIZER_DESC rasterizerDesc = {};
-    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-    rasterizerDesc.FrontCounterClockwise = FALSE;
-    rasterizerDesc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-    rasterizerDesc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-    rasterizerDesc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-    rasterizerDesc.DepthClipEnable = TRUE;
-    rasterizerDesc.MultisampleEnable = FALSE;
-    rasterizerDesc.AntialiasedLineEnable = FALSE;
-    rasterizerDesc.ForcedSampleCount = 0;
-    rasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-    // �u�����h�X�e�[�g
-    D3D12_BLEND_DESC blendDesc = {};
-    blendDesc.AlphaToCoverageEnable = FALSE;
-    blendDesc.IndependentBlendEnable = FALSE;
-    blendDesc.RenderTarget[0].BlendEnable = FALSE;
-    blendDesc.RenderTarget[0].LogicOpEnable = FALSE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    */
-    /*
-    // �[�x/�X�e���V���X�e�[�g
-    D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {};
-    depthStencilDesc.DepthEnable = TRUE;
-    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-    depthStencilDesc.StencilEnable = FALSE;
-    */
-    /*
-    // �O���t�B�b�N�p�C�v���C���X�e�[�g�̐ݒ�
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.pRootSignature = m_rootSignature.Get();
-    psoDesc.VS = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
-    psoDesc.PS = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
-    psoDesc.RasterizerState = rasterizerDesc;
-    psoDesc.BlendState = blendDesc;
-    psoDesc.DepthStencilState = depthStencilDesc;
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = rtState.rtvFormats[0];
-    psoDesc.DSVFormat = rtState.dsvFormat;
-    psoDesc.SampleDesc.Count = 1;
-    */
-    //https://github.com/microsoft/DirectXTK12/wiki/PSOs,-Shaders,-and-Signatures
-    // 
-    // 
-    D3D12_INPUT_LAYOUT_DESC inputlayaout = { m_layout.data(), m_layout.size() };
     DirectX::EffectPipelineStateDescription pd(
-        &inputlayaout,
-        DirectX::CommonStates::Opaque,
-        DirectX::CommonStates::DepthDefault,
-        DirectX::CommonStates::CullCounterClockwise,
+        /* inputLayout */ nullptr,
+        /* blend */ DirectX::CommonStates::Opaque,
+        /* depth */ DirectX::CommonStates::DepthDefault,
+        /* raster */ DirectX::CommonStates::CullCounterClockwise,
         rtState);
-  
+
+    D3D12_INPUT_LAYOUT_DESC inputLayoutDesc = {
+        m_layout.data(),
+        static_cast<UINT>(m_layout.size())
+    };
 
     D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc = {};
     meshDesc.pRootSignature = m_rootSignature.Get();
-    // meshDesc.AS = { ... };
-    // meshDesc.MS = { ... };
-    // meshDesc.PS = { ... };
+    meshDesc.MS = { msBlob->GetBufferPointer(), msBlob->GetBufferSize() };
+    meshDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
     meshDesc.BlendState = pd.blendDesc;
     meshDesc.SampleMask = pd.renderTargetState.sampleMask;
     meshDesc.RasterizerState = pd.rasterizerDesc;
     meshDesc.DepthStencilState = pd.depthStencilDesc;
-   
     meshDesc.PrimitiveTopologyType = pd.primitiveTopology;
     meshDesc.NumRenderTargets = pd.renderTargetState.numRenderTargets;
-    memcpy_s(meshDesc.RTVFormats, sizeof(meshDesc.RTVFormats), pd.renderTargetState.rtvFormats, sizeof(DXGI_FORMAT) * D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT);
+    memcpy(meshDesc.RTVFormats, pd.renderTargetState.rtvFormats,
+        sizeof(DXGI_FORMAT) * D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT);
     meshDesc.DSVFormat = pd.renderTargetState.dsvFormat;
     meshDesc.SampleDesc = pd.renderTargetState.sampleDesc;
     meshDesc.NodeMask = pd.renderTargetState.nodeMask;
@@ -333,20 +257,10 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.SizeInBytes = sizeof(meshDesc);
     streamDesc.pPipelineStateSubobjectStream = &meshDesc;
-    ComPtr<ID3D12PipelineState> pipelineState;
-    DX::ThrowIfFailed(device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipelineState)));
-    
-    D3D12_SHADER_BYTECODE vertexshaderBCode = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
 
+    ComPtr<ID3D12PipelineState> pso;
+    DX::ThrowIfFailed(device->CreatePipelineState(
+        &streamDesc, IID_PPV_ARGS(&pso)));
 
-    D3D12_SHADER_BYTECODE pixelShaderBCode = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
-    // �p�C�v���C���X�e�[�g�I�u�W�F�N�g���쐬
-   
-
-    
-    if (FAILED(hr)) {
-        throw std::runtime_error("Failed to create pipeline state");
-    }
-
-    return pipelineState;
+    return pso;
 }
