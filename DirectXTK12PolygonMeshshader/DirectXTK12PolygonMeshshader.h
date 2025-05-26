@@ -126,3 +126,6 @@ public:
 	Microsoft::WRL::ComPtr<IDxcIncludeHandler>    m_dxcIncludeHandler;
 
 };
+
+
+//https://simoncoenen.com/blog/programming/graphics/DxcCompiling
