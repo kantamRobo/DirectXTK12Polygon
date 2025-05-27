@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Common.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="SimpleTriangleMS.hlsl" />

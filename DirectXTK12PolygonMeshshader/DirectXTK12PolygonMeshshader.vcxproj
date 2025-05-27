@@ -231,6 +231,7 @@
     <Manifest Include="settings.manifest" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Common.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
