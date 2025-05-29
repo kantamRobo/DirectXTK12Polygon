@@ -138,7 +138,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
-    m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"PixelShader", L"MeshShader");
+    m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"SimpleTrianglePS.hlsl", L"SimpleTriangleMS.hlsl");
 
     // ���\�[�X�̃A�b�v���[�h���I��
     auto uploadResourcesFinished = resourceUpload.End(deviceResources->GetCommandQueue());
@@ -147,7 +147,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 
 
 //(DIrectXTK12Assimp�Œǉ�)
-void DirectXTK12MeshShader::Draw(const DX::DeviceResourcesMod* DR) {
+void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod* DR) {
 
 
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
@@ -165,9 +165,8 @@ void DirectXTK12MeshShader::Draw(const DX::DeviceResourcesMod* DR) {
         return;
     }
 
-    // ���̓A�Z���u���[�ݒ�
-    commandList->IASetIndexBuffer(&m_indexBufferView);
-    commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    
+    
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 
@@ -181,17 +180,17 @@ void DirectXTK12MeshShader::Draw(const DX::DeviceResourcesMod* DR) {
     // �p�C�v���C���X�e�[�g�ݒ�
     commandList->SetPipelineState(m_pipelineState.Get());
 
-    // �`��R�[��
-    commandList->DrawIndexedInstanced(
-        static_cast<UINT>(indices.size()), // �C���f�b�N�X��
-        1,                                 // �C���X�^���X��
-        0,                                 // �J�n�C���f�b�N�X
-        0,                                 // ���_�I�t�Z�b�g
-        0                                  // �C���X�^���X�I�t�Z�b�g
-    );
+   
+
+    // Only need one threadgroup to draw a single triangle.
+    commandList->DispatchMesh(1, 1, 1);
+
     auto uploadResourcesFinished = resourceUpload.End(
         DR->GetCommandQueue());
-
+    DR->Present();
+   
+    PIXEndEvent();
+    graphic->Commit(DR->GetCommandQueue());
     uploadResourcesFinished.wait();
 }
 using Microsoft::WRL::ComPtr;
@@ -206,14 +205,10 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
     // 1) DXC の初期化
     InitializeDXC();
 
-    // 2) 各シェーダーをコンパイル
-    auto vsBlob = CompileShaderDXC(
-        m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
-        vsPath, L"main", L"vs_6_0");
-
+  
     auto psBlob = CompileShaderDXC(
         m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
-        psPath, L"main", L"ps_6_0");
+        psPath, L"main", L"ps_6_5");
 
     auto msBlob = CompileShaderDXC(
         m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
