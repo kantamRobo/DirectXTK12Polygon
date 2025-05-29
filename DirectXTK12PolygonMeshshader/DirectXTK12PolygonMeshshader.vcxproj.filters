@@ -23,6 +23,7 @@
     </ClInclude>
     <ClInclude Include="DirectXTK12PolygonMeshshader.h" />
     <ClInclude Include="DeviceResourcesMod.h" />
+    <ClInclude Include="ReadData.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />

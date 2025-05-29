@@ -1,7 +1,7 @@
 ﻿#include "pch.h"
 #include "DirectXTK12PolygonMeshshader.h"
-
-
+#include <d3dx12.h>
+#include "ReadData.h"
 
 
 
@@ -16,7 +16,7 @@
 #include <DirectXMath.h>
 #include <ResourceUploadBatch.h>
 #include <d3dcompiler.h>
-#include <d3dx12.h>
+
 
 enum Descriptors
 {
@@ -232,7 +232,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
         m_layout.data(),
         static_cast<UINT>(m_layout.size())
     };
-
+    auto simpleTriMS = DX::ReadData(L"SimpleTriangleMS.hlsl");
+    auto pixeldata = DX::ReadData(L"SimpleTrianglePS.hlsl");
+    DX::ThrowIfFailed(device->CreateRootSignature(0, simpleTriMS.data(), simpleTriMS.size(), IID_GRAPHICS_PPV_ARGS(m_rootSignature.ReleaseAndGetAddressOf())));
     D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc = {};
     meshDesc.pRootSignature = m_rootSignature.Get();
     meshDesc.MS = { msBlob->GetBufferPointer(), msBlob->GetBufferSize() };
@@ -248,11 +250,11 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
     meshDesc.DSVFormat = pd.renderTargetState.dsvFormat;
     meshDesc.SampleDesc = pd.renderTargetState.sampleDesc;
     meshDesc.NodeMask = pd.renderTargetState.nodeMask;
-
+    
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.SizeInBytes = sizeof(meshDesc);
     streamDesc.pPipelineStateSubobjectStream = &meshDesc;
-
+    
     ComPtr<ID3D12PipelineState> pso;
     DX::ThrowIfFailed(device->CreatePipelineState(
         &streamDesc, IID_PPV_ARGS(&pso)));

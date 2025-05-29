@@ -1,8 +1,9 @@
 ﻿#pragma once
 
 #include <dxcapi.h>    // ← 追加
-#include "DeviceResourcesMod.h"
 #include <GraphicsMemory.h>
+#include "DeviceResourcesMod.h"
+
 #include <fstream>
 #include <vector>
 #include <filesystem> // C++17以降推奨
@@ -94,7 +95,7 @@ public:
         const std::wstring& psPath,
         const std::wstring& msPath);
 	void CreateDescriptors(DX::DeviceResourcesMod* DR);
-	void Draw(GraphicsMemory* graphic,DX::DeviceResourcesMod* DR);
+	void Draw(DirectX::GraphicsMemory* graphic,DX::DeviceResourcesMod* DR);
 
 
 
