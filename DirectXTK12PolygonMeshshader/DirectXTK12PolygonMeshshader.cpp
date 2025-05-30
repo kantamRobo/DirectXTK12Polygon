@@ -39,6 +39,14 @@ void DirectXTK12MeshShader::Initialize(DirectX::GraphicsMemory* graphicsmemory, 
 //-----------------------------------------------------------------------------
 void DirectXTK12MeshShader::InitializeDXC()
 {
+    const GUID D3D12ExperimentalShaderModels =
+    { 0x76f5573e,0xf13a,0x40f5,{0xb2,0x97,0x81,0xce,0x9e,0x18,0x93,0x3f} };
+    D3D12EnableExperimentalFeatures(
+        1,
+        &D3D12ExperimentalShaderModels,
+        nullptr,
+        nullptr
+    );
     if (m_dxcLibrary)
         return; // すでに初期化済み
 
