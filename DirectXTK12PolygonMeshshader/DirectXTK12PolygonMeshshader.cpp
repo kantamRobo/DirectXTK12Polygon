@@ -28,6 +28,12 @@ enum Descriptors
 };
 using namespace DirectX;
 
+
+void DirectXTK12MeshShader::Initialize(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
+{
+    InitializeDXC();
+    CreateBuffer(graphicsmemory, deviceResources, 1200, 600);
+}
 //-----------------------------------------------------------------------------
 // ヘルパー: DXC の初期化（ライブラリ・コンパイラ・インクルードハンドラ）
 //-----------------------------------------------------------------------------
@@ -106,7 +112,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
 
 
-
+    /*
     DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 
     DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
@@ -124,7 +130,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
     XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
     XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
-
+    */
 
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
@@ -132,7 +138,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
 
-    SceneCBResource = graphicsmemory->AllocateConstant(cb);
+    //SceneCBResource = graphicsmemory->AllocateConstant(cb);
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
 

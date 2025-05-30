@@ -4,9 +4,9 @@
 
 #include "pch.h"
 #include "Game.h"
-
+#include "DirectXTK12PolygonMeshshader.h"
 extern void ExitGame() noexcept;
-
+DirectXTK12MeshShader meshshader;
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
@@ -100,7 +100,7 @@ void Game::Render()
     m_deviceResources->Present();
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
+     m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
 
     PIXEndEvent();
 }
@@ -201,9 +201,10 @@ void Game::CreateDeviceDependentResources()
     }
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+    meshshader.
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
@@ -217,7 +218,7 @@ void Game::OnDeviceLost()
     // TODO: Add Direct3D resource cleanup here.
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory.reset();
+     m_graphicsMemory.reset();
 }
 
 void Game::OnDeviceRestored()

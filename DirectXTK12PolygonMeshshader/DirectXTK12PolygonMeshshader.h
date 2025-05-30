@@ -28,7 +28,8 @@ class DirectXTK12MeshShader
 
 
 public:
-	void InitializeDXC();
+    void Initialize(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width);
+    void InitializeDXC();
 	
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShaderDXC(
         IDxcLibrary* lib,
@@ -96,8 +97,7 @@ public:
         const std::wstring& msPath);
 	void CreateDescriptors(DX::DeviceResourcesMod* DR);
 	void Draw(DirectX::GraphicsMemory* graphic,DX::DeviceResourcesMod* DR);
-
-
+    
 
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
