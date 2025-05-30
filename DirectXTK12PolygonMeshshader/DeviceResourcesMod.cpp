@@ -248,6 +248,18 @@ void DeviceResourcesMod::CreateDeviceResources()
     //
     // NOTE: Enabling the debug layer after device creation will invalidate the active device.
     {
+        
+        // アプリ起動 or DeviceResourcesMod::CreateDevice() の最初
+        const GUID D3D12ExperimentalShaderModels =
+        { 0x76f5573e,0xf13a,0x40f5,{0xb2,0x97,0x81,0xce,0x9e,0x18,0x93,0x3f} };
+        D3D12EnableExperimentalFeatures(
+            1,
+            &D3D12ExperimentalShaderModels,
+            nullptr,
+            nullptr
+        );
+
+      
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
         {
@@ -298,6 +310,14 @@ void DeviceResourcesMod::CreateDeviceResources()
     ThrowIfFailed(hr);
 
     m_d3dDevice->SetName(L"DeviceResourcesMod");
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+    m_d3dDevice->CheckFeatureSupport(
+        D3D12_FEATURE_D3D12_OPTIONS7,
+        &opts7, sizeof(opts7));
+    if (opts7.MeshShaderTier < D3D12_MESH_SHADER_TIER_1)
+    {
+        std::runtime_error("メッシュシェーダー使えないでござる");
+    }
 
 #ifndef NDEBUG
     // Configure debug device (if active).

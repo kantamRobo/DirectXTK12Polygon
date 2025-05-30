@@ -187,17 +187,35 @@ void Game::GetDefaultSize(int& width, int& height) const noexcept
 // These are the resources that depend on the device.
 void Game::CreateDeviceDependentResources()
 {
+    const GUID D3D12ExperimentalShaderModels =
+    { 0x76f5573e,0xf13a,0x40f5,{0xb2,0x97,0x81,0xce,0x9e,0x18,0x93,0x3f} };
+    D3D12EnableExperimentalFeatures(
+        1,
+        &D3D12ExperimentalShaderModels,
+        nullptr,
+        nullptr
+    );
     auto device = m_deviceResources->GetD3DDevice();
 
     // Check Shader Model 6 support
-    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_0 };
+    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_5 };
     if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel)))
-        || (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_0))
+        || (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_5))
     {
 #ifdef _DEBUG
-        OutputDebugStringA("ERROR: Shader Model 6.0 is not supported!\n");
+        OutputDebugStringA("ERROR: Shader Model 6.5 is not supported!\n");
 #endif
-        throw std::runtime_error("Shader Model 6.0 is not supported!");
+        throw std::runtime_error("Shader Model 6.5 is not supported!");
+    }
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+    device->CheckFeatureSupport(
+        D3D12_FEATURE_D3D12_OPTIONS7,
+        &opts7, sizeof(opts7));
+    if (opts7.MeshShaderTier < D3D12_MESH_SHADER_TIER_1)
+    {
+
+        std::runtime_error("メッシュシェーダー使えないでござる");
     }
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
