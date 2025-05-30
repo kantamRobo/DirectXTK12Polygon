@@ -238,8 +238,17 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
         m_layout.data(),
         static_cast<UINT>(m_layout.size())
     };
-    auto simpleTriMS = DX::ReadData(L"SimpleTriangleMS.hlsl");
-    auto pixeldata = DX::ReadData(L"SimpleTrianglePS.hlsl");
+    CD3DX12_ROOT_PARAMETER params[RootParameterCount];
+    // 例: 定数バッファをレジスタ b0 にバインド
+    params[ConstantBuffer].InitAsConstantBufferView(0);
+    // （必要なら SRV, Sampler も同様に設定）
+    CD3DX12_ROOT_SIGNATURE_DESC desc;
+    desc.Init(_countof(params), params,
+        0, nullptr,
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+    auto simpleTriMS = DX::ReadData(L"SimpleTriangleMS.cso");
+    auto pixeldata = DX::ReadData(L"SimpleTrianglePS.cso");
     DX::ThrowIfFailed(device->CreateRootSignature(0, simpleTriMS.data(), simpleTriMS.size(), IID_GRAPHICS_PPV_ARGS(m_rootSignature.ReleaseAndGetAddressOf())));
     D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc = {};
     meshDesc.pRootSignature = m_rootSignature.Get();
