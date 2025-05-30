@@ -13,7 +13,7 @@ using Microsoft::WRL::ComPtr;
 
 Game::Game() noexcept(false)
 {
-    m_deviceResources = std::make_unique<DX::DeviceResources>();
+    m_deviceResources = std::make_unique<DX::DeviceResourcesMod>();
     // TODO: Provide parameters for swapchain format, depth/stencil format, and backbuffer count.
     //   Add DX::DeviceResources::c_AllowTearing to opt-in to variable rate displays.
     //   Add DX::DeviceResources::c_EnableHDR for HDR10 display.
@@ -94,7 +94,7 @@ void Game::Render()
     // TODO: Add your rendering code here.
 
     PIXEndEvent(commandList);
-
+    meshshader.Draw(m_graphicsMemory.get(), m_deviceResources.get());
     // Show the new frame.
     PIXBeginEvent(PIX_COLOR_DEFAULT, L"Present");
     m_deviceResources->Present();
@@ -204,7 +204,7 @@ void Game::CreateDeviceDependentResources()
     m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
-    meshshader.
+    meshshader.Initialize(m_graphicsMemory.get(), m_deviceResources.get(), 800, 600);
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.

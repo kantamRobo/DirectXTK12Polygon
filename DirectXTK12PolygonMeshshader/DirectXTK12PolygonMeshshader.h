@@ -3,7 +3,7 @@
 #include <dxcapi.h>    // ← 追加
 #include <GraphicsMemory.h>
 #include "DeviceResourcesMod.h"
-
+#include <DescriptorHeap.h>
 #include <fstream>
 #include <vector>
 #include <filesystem> // C++17以降推奨
