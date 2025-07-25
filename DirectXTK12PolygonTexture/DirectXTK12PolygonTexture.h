@@ -4,9 +4,11 @@
 #include <DescriptorHeap.h>
 #include <GraphicsMemory.h>
 #include <DeviceResources.h>
+#include <DirectXHelpers.h>
 class DirectXTK12PolygonTexture
 {
 public:
+	void CreateTexture(DX::DeviceResources* DR);
 	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width);
 
 
@@ -36,9 +38,11 @@ public:
 	//シェーダーの作成
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;//新規追加
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;//新規追加
+	Microsoft::WRL::ComPtr<ID3D12Resource> tex;
+
 	DirectX::GraphicsResource SceneCBResource;//新規追加
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
-	void CreateTexture();
+
 	//新規追加
 };
 
