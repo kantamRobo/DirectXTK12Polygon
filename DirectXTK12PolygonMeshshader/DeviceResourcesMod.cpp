@@ -32,6 +32,12 @@ namespace
         default:                                return fmt;
         }
     }
+    inline long ComputeIntersectionArea(
+        long ax1, long ay1, long ax2, long ay2,
+        long bx1, long by1, long bx2, long by2) noexcept
+    {
+        return std::max(0l, std::min(ax2, bx2) - std::max(ax1, bx1)) * std::max(0l, std::min(ay2, by2) - std::max(ay1, by1));
+    }
 }
 
 
@@ -78,6 +84,113 @@ DeviceResourcesMod::~DeviceResourcesMod()
         std::ignore = m_commandQueue->PresentX(0, nullptr, nullptr);
     }
 #endif
+}
+
+// Sets the color space for the swap chain in order to handle HDR output.
+void DeviceResourcesMod::UpdateColorSpace()
+{
+    if (!m_dxgiFactory)
+        return;
+
+    if (!m_dxgiFactory->IsCurrent())
+    {
+        // Output information is cached on the DXGI Factory. If it is stale we need to create a new factory.
+        ThrowIfFailed(CreateDXGIFactory2(m_dxgiFactoryFlags, IID_PPV_ARGS(m_dxgiFactory.ReleaseAndGetAddressOf())));
+    }
+
+    DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+
+    bool isDisplayHDR10 = false;
+
+    if (m_swapChain)
+    {
+        // To detect HDR support, we will need to check the color space in the primary
+        // DXGI output associated with the app at this point in time
+        // (using window/display intersection).
+
+        // Get the retangle bounds of the app window.
+        RECT windowBounds;
+        if (!GetWindowRect(m_window, &windowBounds))
+            throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "GetWindowRect");
+
+        const long ax1 = windowBounds.left;
+        const long ay1 = windowBounds.top;
+        const long ax2 = windowBounds.right;
+        const long ay2 = windowBounds.bottom;
+
+        ComPtr<IDXGIOutput> bestOutput;
+        long bestIntersectArea = -1;
+
+        ComPtr<IDXGIAdapter> adapter;
+        for (UINT adapterIndex = 0;
+            SUCCEEDED(m_dxgiFactory->EnumAdapters(adapterIndex, adapter.ReleaseAndGetAddressOf()));
+            ++adapterIndex)
+        {
+            ComPtr<IDXGIOutput> output;
+            for (UINT outputIndex = 0;
+                SUCCEEDED(adapter->EnumOutputs(outputIndex, output.ReleaseAndGetAddressOf()));
+                ++outputIndex)
+            {
+                // Get the rectangle bounds of current output.
+                DXGI_OUTPUT_DESC desc;
+                ThrowIfFailed(output->GetDesc(&desc));
+                const auto& r = desc.DesktopCoordinates;
+
+                // Compute the intersection
+                const long intersectArea = ComputeIntersectionArea(ax1, ay1, ax2, ay2, r.left, r.top, r.right, r.bottom);
+                if (intersectArea > bestIntersectArea)
+                {
+                    bestOutput.Swap(output);
+                    bestIntersectArea = intersectArea;
+                }
+            }
+        }
+
+        if (bestOutput)
+        {
+            ComPtr<IDXGIOutput6> output6;
+            if (SUCCEEDED(bestOutput.As(&output6)))
+            {
+                DXGI_OUTPUT_DESC1 desc;
+                ThrowIfFailed(output6->GetDesc1(&desc));
+
+                if (desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)
+                {
+                    // Display output is HDR10.
+                    isDisplayHDR10 = true;
+                }
+            }
+        }
+    }
+
+    if ((m_options & c_EnableHDR) && isDisplayHDR10)
+    {
+        switch (m_backBufferFormat)
+        {
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+            // The application creates the HDR10 signal.
+            colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+            break;
+
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+            // The system creates the HDR10 signal; application uses linear values.
+            colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    m_colorSpace = colorSpace;
+
+    UINT colorSpaceSupport = 0;
+    if (m_swapChain
+        && SUCCEEDED(m_swapChain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport))
+        && (colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT))
+    {
+        ThrowIfFailed(m_swapChain->SetColorSpace1(colorSpace));
+    }
 }
 
 // Configures the Direct3D device, and stores handles to it and the device context.
@@ -135,6 +248,18 @@ void DeviceResourcesMod::CreateDeviceResources()
     //
     // NOTE: Enabling the debug layer after device creation will invalidate the active device.
     {
+        
+        // アプリ起動 or DeviceResourcesMod::CreateDevice() の最初
+        const GUID D3D12ExperimentalShaderModels =
+        { 0x76f5573e,0xf13a,0x40f5,{0xb2,0x97,0x81,0xce,0x9e,0x18,0x93,0x3f} };
+        D3D12EnableExperimentalFeatures(
+            1,
+            &D3D12ExperimentalShaderModels,
+            nullptr,
+            nullptr
+        );
+
+      
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
         {
@@ -185,6 +310,14 @@ void DeviceResourcesMod::CreateDeviceResources()
     ThrowIfFailed(hr);
 
     m_d3dDevice->SetName(L"DeviceResourcesMod");
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+    m_d3dDevice->CheckFeatureSupport(
+        D3D12_FEATURE_D3D12_OPTIONS7,
+        &opts7, sizeof(opts7));
+    if (opts7.MeshShaderTier < D3D12_MESH_SHADER_TIER_1)
+    {
+        std::runtime_error("メッシュシェーダー使えないでござる");
+    }
 
 #ifndef NDEBUG
     // Configure debug device (if active).

@@ -28,11 +28,18 @@ enum Descriptors
 };
 using namespace DirectX;
 
+
+void DirectXTK12MeshShader::Initialize(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
+{
+    InitializeDXC();
+    CreateBuffer(graphicsmemory, deviceResources, 1200, 600);
+}
 //-----------------------------------------------------------------------------
 // ヘルパー: DXC の初期化（ライブラリ・コンパイラ・インクルードハンドラ）
 //-----------------------------------------------------------------------------
 void DirectXTK12MeshShader::InitializeDXC()
 {
+    
     if (m_dxcLibrary)
         return; // すでに初期化済み
 
@@ -106,7 +113,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
 
 
-
+    /*
     DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 
     DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
@@ -124,7 +131,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
     XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
     XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
-
+    */
 
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
@@ -132,7 +139,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
 
-    SceneCBResource = graphicsmemory->AllocateConstant(cb);
+    //SceneCBResource = graphicsmemory->AllocateConstant(cb);
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
 
@@ -187,10 +194,10 @@ void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod
 
     auto uploadResourcesFinished = resourceUpload.End(
         DR->GetCommandQueue());
-    DR->Present();
+    
    
     PIXEndEvent();
-    graphic->Commit(DR->GetCommandQueue());
+    
     uploadResourcesFinished.wait();
 }
 using Microsoft::WRL::ComPtr;
@@ -228,13 +235,26 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
         /* raster */ DirectX::CommonStates::CullCounterClockwise,
         rtState);
 
-    D3D12_INPUT_LAYOUT_DESC inputLayoutDesc = {
-        m_layout.data(),
-        static_cast<UINT>(m_layout.size())
-    };
-    auto simpleTriMS = DX::ReadData(L"SimpleTriangleMS.hlsl");
-    auto pixeldata = DX::ReadData(L"SimpleTrianglePS.hlsl");
-    DX::ThrowIfFailed(device->CreateRootSignature(0, simpleTriMS.data(), simpleTriMS.size(), IID_GRAPHICS_PPV_ARGS(m_rootSignature.ReleaseAndGetAddressOf())));
+ 
+    // 1) ルートシグネチャ -------------------------------------------------
+    CD3DX12_ROOT_PARAMETER1 rootParams[1] = {};
+    rootParams[ConstantBuffer].InitAsConstantBufferView(0, 0);
+
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc;
+    rsDesc.Init_1_1(_countof(rootParams), rootParams,
+        0, nullptr,
+        D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+    ComPtr<ID3DBlob> rsBlob, rsErr;
+    DX::ThrowIfFailed(D3D12SerializeVersionedRootSignature(
+        &rsDesc, &rsBlob, &rsErr));
+
+    DX::ThrowIfFailed(device->CreateRootSignature(
+        0,
+        rsBlob->GetBufferPointer(),
+        rsBlob->GetBufferSize(),
+        IID_PPV_ARGS(m_rootSignature.ReleaseAndGetAddressOf())));
+
     D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc = {};
     meshDesc.pRootSignature = m_rootSignature.Get();
     meshDesc.MS = { msBlob->GetBufferPointer(), msBlob->GetBufferSize() };
@@ -251,13 +271,18 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
     meshDesc.SampleDesc = pd.renderTargetState.sampleDesc;
     meshDesc.NodeMask = pd.renderTargetState.nodeMask;
     
-    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
-    streamDesc.SizeInBytes = sizeof(meshDesc);
-    streamDesc.pPipelineStateSubobjectStream = &meshDesc;
+   
     
     ComPtr<ID3D12PipelineState> pso;
-    DX::ThrowIfFailed(device->CreatePipelineState(
-        &streamDesc, IID_PPV_ARGS(&pso)));
+
+
+    // meshDesc が D3DX12_MESH_SHADER_PIPELINE_STATE_DESC meshDesc; 定義済みとする
+    CD3DX12_PIPELINE_MESH_STATE_STREAM pipelineStream(meshDesc);
+    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {
+        sizeof(pipelineStream),
+        &pipelineStream
+    };
+    DX::ThrowIfFailed(device->CreatePipelineState(&streamDesc, IID_GRAPHICS_PPV_ARGS(&pso)));
 
     return pso;
 }

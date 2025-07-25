@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "DeviceResources.h"
+#include "DeviceResourcesMod.h"
 #include "StepTimer.h"
 
 
@@ -56,11 +56,11 @@ private:
     void CreateWindowSizeDependentResources();
 
     // Device resources.
-    std::unique_ptr<DX::DeviceResources>        m_deviceResources;
+    std::unique_ptr<DX::DeviceResourcesMod>        m_deviceResources;
 
     // Rendering loop timer.
     DX::StepTimer                               m_timer;
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
+     std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
 };

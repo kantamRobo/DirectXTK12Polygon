@@ -24,12 +24,15 @@ namespace DX
     public:
         static constexpr unsigned int c_ReverseDepth = 0x1;
 
+        static constexpr unsigned int c_EnableHDR = 0x2;
+        // HDR Support
+        DXGI_COLOR_SPACE_TYPE                               m_colorSpace;
         DeviceResourcesMod(DXGI_FORMAT backBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM,
             DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT,
             UINT backBufferCount = 2,
             unsigned int flags = 0) noexcept(false);
         ~DeviceResourcesMod();
-
+        
         DeviceResourcesMod(DeviceResourcesMod&&) = default;
         DeviceResourcesMod& operator= (DeviceResourcesMod&&) = default;
 
@@ -49,6 +52,7 @@ namespace DX
         void Suspend();
         void Resume();
         void WaitForGpu() noexcept;
+        void UpdateColorSpace();
 #ifdef _GAMING_XBOX
         void WaitForOrigin();
 #endif
@@ -138,6 +142,7 @@ namespace DX
         UINT                                                m_backBufferCount;
         float                                               m_clearColor[4];
 
+        DWORD                                               m_dxgiFactoryFlags;
         // Cached device properties.
         HWND                                                m_window;
         D3D_FEATURE_LEVEL                                   m_d3dFeatureLevel;
@@ -148,5 +153,7 @@ namespace DX
 
         // The IDeviceNotify can be held directly as it owns the DeviceResources.
         IDeviceNotify* m_deviceNotify;
+
+        DXGI_COLOR_SPACE_TYPE       GetColorSpace() const noexcept { return m_colorSpace; }
     };
 }

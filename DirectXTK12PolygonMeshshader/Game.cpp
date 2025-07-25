@@ -4,16 +4,16 @@
 
 #include "pch.h"
 #include "Game.h"
-
+#include "DirectXTK12PolygonMeshshader.h"
 extern void ExitGame() noexcept;
-
+DirectXTK12MeshShader meshshader;
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
 
 Game::Game() noexcept(false)
 {
-    m_deviceResources = std::make_unique<DX::DeviceResources>();
+    m_deviceResources = std::make_unique<DX::DeviceResourcesMod>();
     // TODO: Provide parameters for swapchain format, depth/stencil format, and backbuffer count.
     //   Add DX::DeviceResources::c_AllowTearing to opt-in to variable rate displays.
     //   Add DX::DeviceResources::c_EnableHDR for HDR10 display.
@@ -94,13 +94,13 @@ void Game::Render()
     // TODO: Add your rendering code here.
 
     PIXEndEvent(commandList);
-
+    meshshader.Draw(m_graphicsMemory.get(), m_deviceResources.get());
     // Show the new frame.
     PIXBeginEvent(PIX_COLOR_DEFAULT, L"Present");
     m_deviceResources->Present();
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
+     m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
 
     PIXEndEvent();
 }
@@ -187,23 +187,42 @@ void Game::GetDefaultSize(int& width, int& height) const noexcept
 // These are the resources that depend on the device.
 void Game::CreateDeviceDependentResources()
 {
+    const GUID D3D12ExperimentalShaderModels =
+    { 0x76f5573e,0xf13a,0x40f5,{0xb2,0x97,0x81,0xce,0x9e,0x18,0x93,0x3f} };
+    D3D12EnableExperimentalFeatures(
+        1,
+        &D3D12ExperimentalShaderModels,
+        nullptr,
+        nullptr
+    );
     auto device = m_deviceResources->GetD3DDevice();
 
     // Check Shader Model 6 support
-    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_0 };
+    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_5 };
     if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel)))
-        || (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_0))
+        || (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_5))
     {
 #ifdef _DEBUG
-        OutputDebugStringA("ERROR: Shader Model 6.0 is not supported!\n");
+        OutputDebugStringA("ERROR: Shader Model 6.5 is not supported!\n");
 #endif
-        throw std::runtime_error("Shader Model 6.0 is not supported!");
+        throw std::runtime_error("Shader Model 6.5 is not supported!");
+    }
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7 = {};
+    device->CheckFeatureSupport(
+        D3D12_FEATURE_D3D12_OPTIONS7,
+        &opts7, sizeof(opts7));
+    if (opts7.MeshShaderTier < D3D12_MESH_SHADER_TIER_1)
+    {
+
+        std::runtime_error("メッシュシェーダー使えないでござる");
     }
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+    meshshader.Initialize(m_graphicsMemory.get(), m_deviceResources.get(), 800, 600);
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
@@ -217,7 +236,7 @@ void Game::OnDeviceLost()
     // TODO: Add Direct3D resource cleanup here.
 
     // If using the DirectX Tool Kit for DX12, uncomment this line:
-    // m_graphicsMemory.reset();
+     m_graphicsMemory.reset();
 }
 
 void Game::OnDeviceRestored()
