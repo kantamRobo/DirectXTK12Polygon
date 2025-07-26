@@ -1,7 +1,11 @@
 ﻿#include "pch.h"
-#include "DirectXTK12PolygonMeshshader.h"
+#include "DirectXTK12PolygonMeshshaderScene.h"
 #include <d3dx12.h>
 #include "ReadData.h"
+#include <BufferHelpers.h>
+#include <EffectPipelineStateDescription.h>
+#include <CommonStates.h>
+#include <DirectXHelpers.h>
 
 
 
@@ -9,13 +13,6 @@
 
 
 
-
-
-
-#include <dxcapi.h>    // ← DXC API
-#include <DirectXMath.h>
-#include <ResourceUploadBatch.h>
-#include <d3dcompiler.h>
 
 
 enum Descriptors
@@ -29,7 +26,7 @@ enum Descriptors
 using namespace DirectX;
 
 
-void DirectXTK12MeshShader::Initialize(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
+void DirectXTK12PolygonMeshshaderScene::Initialize(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
 {
     InitializeDXC();
     CreateBuffer(graphicsmemory, deviceResources, 1200, 600);
@@ -37,9 +34,9 @@ void DirectXTK12MeshShader::Initialize(DirectX::GraphicsMemory* graphicsmemory, 
 //-----------------------------------------------------------------------------
 // ヘルパー: DXC の初期化（ライブラリ・コンパイラ・インクルードハンドラ）
 //-----------------------------------------------------------------------------
-void DirectXTK12MeshShader::InitializeDXC()
+void DirectXTK12PolygonMeshshaderScene::InitializeDXC()
 {
-    
+
     if (m_dxcLibrary)
         return; // すでに初期化済み
 
@@ -51,7 +48,7 @@ void DirectXTK12MeshShader::InitializeDXC()
     DX::ThrowIfFailed(m_dxcLibrary->CreateIncludeHandler(&m_dxcIncludeHandler));
 }
 
-HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
+HRESULT DirectXTK12PolygonMeshshaderScene::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width)
 {
 
     // �O�p�`�̒��_�f�[�^
@@ -113,7 +110,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
 
 
-    
+
     DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 
     DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
@@ -131,7 +128,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
     XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
     XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
-    
+
 
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
@@ -154,7 +151,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 
 
 //(DIrectXTK12Assimp�Œǉ�)
-void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod* DR) {
+void DirectXTK12PolygonMeshshaderScene::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod* DR) {
 
 
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
@@ -172,8 +169,8 @@ void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod
         return;
     }
 
-    
-    
+
+
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 
@@ -187,21 +184,21 @@ void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod
     // �p�C�v���C���X�e�[�g�ݒ�
     commandList->SetPipelineState(m_pipelineState.Get());
 
-   
+
 
     // Only need one threadgroup to draw a single triangle.
     commandList->DispatchMesh(1, 1, 1);
 
     auto uploadResourcesFinished = resourceUpload.End(
         DR->GetCommandQueue());
-    
-   
+
+
     PIXEndEvent();
-    
+
     uploadResourcesFinished.wait();
 }
 using Microsoft::WRL::ComPtr;
-Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphicsPipelineState(
+Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonMeshshaderScene::CreateGraphicsPipelineState(
     DX::DeviceResourcesMod* devResources,
     const std::wstring& vsPath,
     const std::wstring& psPath,
@@ -212,7 +209,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
     // 1) DXC の初期化
     InitializeDXC();
 
-  
+
     auto psBlob = CompileShaderDXC(
         m_dxcLibrary.Get(), m_dxcCompiler.Get(), m_dxcIncludeHandler.Get(),
         psPath, L"main", L"ps_6_5");
@@ -235,7 +232,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
         /* raster */ DirectX::CommonStates::CullCounterClockwise,
         rtState);
 
- 
+
     // 1) ルートシグネチャ -------------------------------------------------
     CD3DX12_ROOT_PARAMETER1 rootParams[1] = {};
     rootParams[ConstantBuffer].InitAsConstantBufferView(0, 0);
@@ -270,9 +267,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
     meshDesc.DSVFormat = pd.renderTargetState.dsvFormat;
     meshDesc.SampleDesc = pd.renderTargetState.sampleDesc;
     meshDesc.NodeMask = pd.renderTargetState.nodeMask;
-    
-   
-    
+
+
+
     ComPtr<ID3D12PipelineState> pso;
 
 
