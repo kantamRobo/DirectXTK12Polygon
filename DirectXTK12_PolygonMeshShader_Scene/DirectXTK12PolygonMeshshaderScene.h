@@ -90,7 +90,7 @@ public:
         DX::ThrowIfFailed(result->GetResult(&shaderBlob));
         return shaderBlob;
     }
-
+    const int VertexShaderResource = 1;
     HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width);
 
 
@@ -108,7 +108,7 @@ public:
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
-
+    D3D12_SHADER_RESOURCE_VIEW_DESC vertexBufferDesc = {};
 
 
     //�o�b�t�@

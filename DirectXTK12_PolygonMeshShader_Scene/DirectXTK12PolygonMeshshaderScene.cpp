@@ -81,7 +81,7 @@ HRESULT DirectXTK12PolygonMeshshaderScene::CreateBuffer(DirectX::GraphicsMemory*
             resourceUpload,
             vertices.data(),
             static_cast<int>(vertices.size()),
-            sizeof(DirectX::VertexPosition),
+            sizeof(DirectX::VertexPositionNormal),
             D3D12_RESOURCE_STATE_COMMON,
             m_vertexBuffer.GetAddressOf()
         )
@@ -100,11 +100,19 @@ HRESULT DirectXTK12PolygonMeshshaderScene::CreateBuffer(DirectX::GraphicsMemory*
     );
 
 
-    //(DirectXTK12Assimp�Œǉ�)
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionNormal);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionNormal) * vertices.size();
 
+    
+    vertexBufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+    vertexBufferDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    vertexBufferDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    vertexBufferDesc.Buffer.FirstElement = 0;
+    vertexBufferDesc.Buffer.NumElements = 3;
+    vertexBufferDesc.Buffer.StructureByteStride = sizeof(DirectX::VertexPositionNormal);
+    vertexBufferDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+
+   
+  //インデックスもシェーダーリソースとしてぶち込むの・・・・？
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
@@ -180,6 +188,11 @@ void DirectXTK12PolygonMeshshaderScene::Draw(GraphicsMemory* graphic, DX::Device
 
     //2024/12/30/9:42
     commandList->SetGraphicsRootConstantBufferView(0, SceneCBResource.GpuAddress());
+    commandList->SetGraphicsRootShaderResourceView(
+        VertexShaderResource,
+     m_vertexBuffer->GetGPUVirtualAddress()
+    );
+
 
     // �p�C�v���C���X�e�[�g�ݒ�
     commandList->SetPipelineState(m_pipelineState.Get());
@@ -235,8 +248,8 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonMeshshaderScene::C
 
     // 1) ルートシグネチャ -------------------------------------------------
     CD3DX12_ROOT_PARAMETER1 rootParams[1] = {};
-    rootParams[ConstantBuffer].InitAsConstantBufferView(0, 0);
-
+    rootParams[ConstantBuffer].InitAsConstantBufferView(ConstantBuffer, 0);
+    rootParams[VertexShaderResource].InitAsShaderResourceView(VertexShaderResource, 0);
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc;
     rsDesc.Init_1_1(_countof(rootParams), rootParams,
         0, nullptr,
