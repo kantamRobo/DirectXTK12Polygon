@@ -203,7 +203,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
         DirectX::CommonStates::CullCounterClockwise,
         rtState);
     D3D12_SHADER_BYTECODE vertexshaderBCode = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
-
+    //https://learn.microsoft.com/ja-jp/windows/win32/direct3d12/cd3dx12-shader-bytecode
 
     D3D12_SHADER_BYTECODE pixelShaderBCode = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
     // パイプラインステートオブジェクトを作成
