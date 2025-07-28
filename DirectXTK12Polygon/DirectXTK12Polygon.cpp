@@ -43,6 +43,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     memcpy(m_VertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
     m_IndexBuffer = graphicsmemory->Allocate(sizeof(unsigned short) * indices.size());
     //(DirectXTK12Assimp‚Å’Ç‰Á)
+
     m_vertexBufferView.BufferLocation = m_VertexBuffer.GpuAddress();
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
     m_vertexBufferView.SizeInBytes = static_cast<UINT>(m_VertexBuffer.Size());
