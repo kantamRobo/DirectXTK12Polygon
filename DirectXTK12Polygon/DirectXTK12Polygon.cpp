@@ -13,7 +13,7 @@ enum Descriptors
 };
 HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
 {
-
+    
     // 三角形の頂点データ
     
     vertices.resize(3);
@@ -37,41 +37,21 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
 
     resourceUpload.Begin();
-    // 頂点バッファの作成
-    DX::ThrowIfFailed(
-        DirectX::CreateStaticBuffer(
-            deviceResources->GetD3DDevice(),
-            resourceUpload,
-            vertices.data(),
-            static_cast<int>(vertices.size()),
-            sizeof(DirectX::VertexPosition),
-            D3D12_RESOURCE_STATE_COMMON,
-            m_vertexBuffer.GetAddressOf()
-        )
-    );
-    // インデックスバッファの作成
-    DX::ThrowIfFailed(
-        DirectX::CreateStaticBuffer(
-            deviceResources->GetD3DDevice(),
-            resourceUpload,
-            indices.data(),
-           indices.size(),
-            sizeof(unsigned short),
-            D3D12_RESOURCE_STATE_COMMON,
-            m_indexBuffer.GetAddressOf()
-        )
-    );
-
-
-    //(DirectXTK12Assimpで追加)
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition)*vertices.size();
-
-    m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
-    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes =  sizeof(unsigned short)*indices.size();
    
+    
+    m_VertexBuffer = graphicsmemory->Allocate(sizeof(DirectX::VertexPosition) * vertices.size());
+    memcpy(m_VertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
+    m_IndexBuffer = graphicsmemory->Allocate(sizeof(unsigned short) * indices.size());
+    //(DirectXTK12Assimpで追加)
+    m_vertexBufferView.BufferLocation = m_VertexBuffer.GpuAddress();
+    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
+    m_vertexBufferView.SizeInBytes = static_cast<UINT>(m_VertexBuffer.Size());
+
+    m_indexBufferView.BufferLocation = m_IndexBuffer.GpuAddress();
+    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
+    m_indexBufferView.SizeInBytes = m_IndexBuffer.Size();
+    memcpy(m_IndexBuffer.Memory(), indices.data(), sizeof(unsigned short) * indices.size());
+
     
 
     //定数バッファの作成(DIrectXTK12Assimpで追加)

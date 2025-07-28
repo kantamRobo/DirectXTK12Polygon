@@ -25,8 +25,8 @@ public:
 
 	//バッファ
 	
-	DirectX::GraphicsMemory m_VertexBuffer;
-	DirectX::GraphicsMemory m_IndexBuffer;
+	DirectX::GraphicsResource m_VertexBuffer;
+	DirectX::GraphicsResource m_IndexBuffer;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
 	std::vector<DirectX::VertexPosition> vertices;
 	std::vector<unsigned short> indices;
