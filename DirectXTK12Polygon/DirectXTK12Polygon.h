@@ -3,6 +3,7 @@
 #include <DeviceResources.h>
 #include <DescriptorHeap.h>
 #include <memory>
+#include <GraphicsMemory.h>
 class DirectXTK12Polygon
 {
 public:
@@ -12,7 +13,7 @@ public:
 	std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPipelineState(DX::DeviceResources* deviceresources, const std::wstring& vertexShaderPath, const std::wstring& pixelShaderPath);
-	void CreateDescriptors(DX::DeviceResources* DR);
+	
 	void Draw(const DX::DeviceResources* DR);
 
 
@@ -23,10 +24,9 @@ public:
 	
 
 	//バッファ
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
-
+	
+	DirectX::GraphicsMemory m_VertexBuffer;
+	DirectX::GraphicsMemory m_IndexBuffer;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
 	std::vector<DirectX::VertexPosition> vertices;
 	std::vector<unsigned short> indices;
