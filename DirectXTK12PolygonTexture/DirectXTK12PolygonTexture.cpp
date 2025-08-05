@@ -18,8 +18,7 @@ void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
     resourceUpload.Begin();
 
     DX::ThrowIfFailed(
-        CreateWICTextureFromFile(device, resourceUpload,L"C:\\Users\\hatte\\OneDrive\\Pictures\\スクリーンショット-2022-11-09-9.21.05.png",
-            tex.ReleaseAndGetAddressOf(), true
+        CreateWICTextureFromFile(device, resourceUpload,L"C:\\Users\\hatte\\OneDrive\\Pictures\\Screenshots\\スクリーンショット 2025-07-23 172311.png",            tex.ReleaseAndGetAddressOf(), true
     ));
 
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
