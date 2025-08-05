@@ -7,7 +7,7 @@ VSOutput main(float3 inPos : POSITION,
     VSOutput outV;
 
     float4 pos = float4(inPos, 1.0f);
-    outV.position = pos + offset; // Å© SV_POSITION ÇïKÇ∏èëÇ≠
+    outV.position = pos;
     outV.color = inColor;
     outV.texcoord = texcoord;
     return outV;
