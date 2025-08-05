@@ -2,7 +2,7 @@
 #include "Shader.hlsli"
 
 // テクスチャおよびサンプラーステートを定義
-Texture2D g_Texture : register(t1);
+Texture2D g_Texture : register(t0);
 SamplerState g_Sampler : register(s0);
 
 // 入力構造体（UV座標を受け取れるようにする）

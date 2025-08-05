@@ -12,15 +12,17 @@ public:
 	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width);
 
 
-	std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
-
+	std::unique_ptr<DirectX::DescriptorHeap> m_srvDescriptor;
+	std::unique_ptr<DirectX::DescriptorHeap> m_samplerDescriptor;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPipelineState(DX::DeviceResources* deviceresources, const std::wstring& vertexShaderPath, const std::wstring& pixelShaderPath);
 	void CreateDescriptors(DX::DeviceResources* DR);
 	void Draw(const DX::DeviceResources* DR);
 
 
-	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
+	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView = {};
+	D3D12_INDEX_BUFFER_VIEW m_indexBufferView = {};
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
 
 
@@ -31,7 +33,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
-	std::vector<DirectX::VertexPosition> vertices;
+	std::vector<DirectX::VertexPositionColorTexture> vertices;
 	std::vector<unsigned short> indices;
 
 	DirectX::XMMATRIX modelmat;
