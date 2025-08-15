@@ -20,7 +20,10 @@ public:
 	bool CreateDescriptorHeap(GraphicsEngine& ge, ID3D12Device5*& d3dDevice);
 	std::unique_ptr<RenderTexture> m_albedoRT;
 	std::unique_ptr<RenderTexture> m_NormalRT;
-	std::unique_ptr<DirectX::DescriptorHeap>  m_resourceDescriptors;
+	std::unique_ptr<DirectX::DescriptorHeap> m_albedoRTD;
+
+	std::unique_ptr<DirectX::DescriptorHeap> m_NormalRTD;
+	std::unique_ptr<DirectX::DescriptorHeap>  m_NormalDescriptors;
 	std::unique_ptr<DirectX::DescriptorHeap> m_renderDescriptors;
 };
 

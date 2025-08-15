@@ -92,6 +92,13 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
+    commandList->OMSetRenderTargets(1, &renderer.m_albedoRTD->GetCpuHandle(0), FALSE, &m_deviceResources->GetDepthStencilView());
+    commandList->OMSetRenderTargets(1, &renderer.m_NormalRTD->GetCpuHandle(0), FALSE, &m_deviceResources->GetDepthStencilView());
+
+    
+    renderer.m_albedoRT->Clear(commandList);
+
+    renderer.m_NormalRT->Clear(commandList);
 
     PIXEndEvent(commandList);
 

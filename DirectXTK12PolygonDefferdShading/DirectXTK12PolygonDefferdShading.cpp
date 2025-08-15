@@ -10,12 +10,12 @@ bool DirectXTK12PolygonDefferdShading::CreateDescriptorHeap(GraphicsEngine& ge, 
     m_resourceDescriptors = std::make_unique<DirectX::DescriptorHeap>(d3dDevice,
         Descriptors::Count);
 
-    m_albedoRT = std::make_unique<DirectX::DescriptorHeap>(d3dDevice,
+    m_albedoRTD = std::make_unique<DirectX::DescriptorHeap>(d3dDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
         RTDescriptors::RTCount);
 
-    m_NormalRT = std::make_unique<DirectX::DescriptorHeap>(d3dDevice,
+    m_NormalRTD = std::make_unique<DirectX::DescriptorHeap>(d3dDevice,
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
         RTDescriptors::RTCount);

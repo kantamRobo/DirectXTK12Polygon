@@ -4,7 +4,7 @@
 
 #include "pch.h"
 #include "Game.h"
-
+#include <ResourceUploadBatch.h>
 extern void ExitGame() noexcept;
 
 using namespace DirectX;
@@ -189,7 +189,9 @@ void Game::GetDefaultSize(int& width, int& height) const noexcept
 void Game::CreateDeviceDependentResources()
 {
     auto device = m_deviceResources->GetD3DDevice();
-
+    ResourceUploadBatch upload(device);
+    upload.Begin();
+    
     // Check Shader Model 6 support
     D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_0 };
     if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel)))
@@ -208,7 +210,11 @@ void Game::CreateDeviceDependentResources()
     m_model = std::make_unique<DirectXTK12Polygon>();
   
     m_model->CreateBuffer(m_graphicsMemory.get(), m_deviceResources.get(), m_height, m_width);
-  
+    // Upload the resources to the GPU.
+    auto finish = upload.End(m_deviceResources->GetCommandQueue());
+
+    // Wait for the upload thread to terminate
+    finish.wait();
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
