@@ -49,17 +49,19 @@ void main(
         float4 p2 = float4(gVertices[i2].pos, 1.0);
 
         // MVP
-        const float4x4 VP = mul(gCB.View, gCB.Proj);
-        const float4x4 MVP = mul(gCB.World, VP);
+        const float4x4 MVP = mul(gCB.Proj, mul(gCB.View, gCB.World));
 
         // 頂点（白固定。必要なら SRV から色を読む構造に拡張して下さい）
-        verts[0].Position = mul(p0, MVP);
+         // ワールド変換、ビュー変換、プロジェクション変換を適用
+        
         verts[0].Color = float4(1, 1, 1, 1);
-        verts[1].Position = mul(p1, MVP);
         verts[1].Color = float4(1, 1, 1, 1);
-        verts[2].Position = mul(p2, MVP);
         verts[2].Color = float4(1, 1, 1, 1);
 
+        // (2) ベクトルは左ではなく右から掛ける
+        verts[0].Position = p0;
+        verts[1].Position = p1;
+        verts[2].Position = p2;
         // 三角形 1 枚
         tris[0] = uint3(0, 1, 2);
     }

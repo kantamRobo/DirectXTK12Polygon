@@ -249,7 +249,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
         /* inputLayout */ nullptr,
         /* blend */ DirectX::CommonStates::Opaque,
         /* depth */ DirectX::CommonStates::DepthDefault,
-        /* raster */ DirectX::CommonStates::CullCounterClockwise,
+        /* raster */ DirectX::CommonStates::CullNone,
         rtState);
 
  
