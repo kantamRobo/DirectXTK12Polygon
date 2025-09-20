@@ -88,7 +88,8 @@ public:
 	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResourcesMod* deviceResources, int height, int width);
 
 
-	std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
+    std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
+    
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState>CreateGraphicsPipelineState(
         DX::DeviceResourcesMod* devResources,
@@ -109,10 +110,10 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
-
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_heaps;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
 	std::vector<DirectX::VertexPosition> vertices;
-	std::vector<unsigned short> indices;
+	std::vector<uint32_t> indices;
 
 	DirectX::XMMATRIX modelmat;
 	//�V�F�[�_�[�̍쐬

@@ -1,14 +1,10 @@
 //--------------------------------------------------------------------------------------
-// SimpleTrianglePS.hlsl
-//
-// Advanced Technology Group (ATG)
-// Copyright (C) Microsoft Corporation. All rights reserved.
+// SimpleTrianglePS.hlsl (PS)
 //--------------------------------------------------------------------------------------
-
 #include "Common.hlsli"
 
 [RootSignature("")]
-float4 main(VertexOut input) : SV_TARGET
+float4 main(VertexOut input) : SV_Target
 {
-    return input.Color;
+    return input.Color; // MS 側でセットした色をそのまま出力
 }

@@ -61,7 +61,7 @@ DeviceResourcesMod::DeviceResourcesMod(
     m_clearColor{},
     m_window(nullptr),
     m_d3dFeatureLevel(D3D_FEATURE_LEVEL_11_0),
-    m_outputSize{ 0, 0, 1, 1 },
+    m_outputSize{ 0, 0, 800, 600 },
     m_options(flags),
     m_deviceNotify(nullptr)
 {

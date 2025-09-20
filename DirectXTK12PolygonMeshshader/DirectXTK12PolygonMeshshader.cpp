@@ -96,50 +96,82 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
             resourceUpload,
             indices.data(),
             indices.size(),
-            sizeof(unsigned short),
+            sizeof(uint32_t),
             D3D12_RESOURCE_STATE_COMMON,
             m_indexBuffer.GetAddressOf()
         )
     );
 
+    // バッファアップロードが終わる前後でOKですが、GPU可視のSRVヒープを先に用意しておくと楽です。
+// DirectXTK12 の DescriptorHeap を既にメンバに持っているのでそれを利用:
+   
+        // CBV/SRV/UAV 用のシェーダ可視ヒープを 2 枚（頂点/インデックス）確保
+        m_resourceDescriptors = std::make_unique<DirectX::DescriptorHeap>(
+            deviceResources->GetD3DDevice(),
 
-    //(DirectXTK12Assimp�Œǉ�)
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionNormal);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionNormal) * vertices.size();
+            Descriptors::Count);
+        auto HeapsDesc = m_resourceDescriptors->Heap()->GetDesc();
+        // 1) SRVヒープを1本だけ作る（2つ分の枠）
+        D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+        srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        srvHeapDesc.NumDescriptors = 2; // 頂点SRV + インデックスSRV
+        srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        DX::ThrowIfFailed(deviceResources->GetD3DDevice()->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_heaps)));
 
-    m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
-    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
+        // 頂点バッファ：StructuredBuffer<VertexPosition>
+        D3D12_SHADER_RESOURCE_VIEW_DESC vtxSrvDesc = {};
+        vtxSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        vtxSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        vtxSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        vtxSrvDesc.Buffer.FirstElement = 0;
+        vtxSrvDesc.Buffer.NumElements = static_cast<UINT>(vertices.size());
+        vtxSrvDesc.Buffer.StructureByteStride = sizeof(DirectX::VertexPosition);
+        vtxSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+        auto cpu0 = m_resourceDescriptors->GetCpuHandle(0);
+        deviceResources->GetD3DDevice()->CreateShaderResourceView(
+            m_vertexBuffer.Get(), &vtxSrvDesc, cpu0);
+
+        // インデックスバッファ：StructuredBuffer<uint>
+        D3D12_SHADER_RESOURCE_VIEW_DESC idxSrvDesc = {};
+        idxSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+
+        idxSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        idxSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+
+        idxSrvDesc.Buffer.FirstElement = 0;
+        idxSrvDesc.Buffer.NumElements = static_cast<UINT>(indices.size());
+        idxSrvDesc.Buffer.StructureByteStride = sizeof(uint32_t);
+        idxSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        const UINT inc = deviceResources->GetD3DDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        auto cpuStart = m_heaps->GetCPUDescriptorHandleForHeapStart();
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuVtx = cpuStart;
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuIdx = { cpuStart.ptr + inc };
+
+        // 2) それぞれのSRVを同ヒープの別スロットに作る
+        deviceResources->GetD3DDevice()->CreateShaderResourceView(m_vertexBuffer.Get(), &vtxSrvDesc, cpuVtx);
+        deviceResources->GetD3DDevice()->CreateShaderResourceView(m_indexBuffer.Get(), &idxSrvDesc, cpuIdx);
 
 
-    
-    DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
+        auto sz = deviceResources->GetOutputSize();
+        float aspect = float(sz.right - sz.left) / float(sz.bottom - sz.top);
 
-    DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
-    DirectX::XMVECTOR focus = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-    DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eye, focus, up);
+   
+        using namespace DirectX;
+        XMMATRIX world = XMMatrixIdentity();
+        XMVECTOR eye = XMVectorSet(2, 2, -2, 0);
+        XMVECTOR focus = XMVectorSet(0, 0, 0, 0);
+        XMVECTOR up = XMVectorSet(0, 1, 0, 0);
 
-    constexpr float fov = DirectX::XMConvertToRadians(45.0f);
-    float    aspect = (1200 / 600);
-    float    nearZ = 0.1f;
-    float    farZ = 100.0f;
-    DirectX::XMMATRIX projMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
+        XMMATRIX view = XMMatrixLookAtLH(eye, focus, up);
+        XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), aspect, 0.1f, 100.0f);
 
-    SceneCB cb;
-    XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
-    XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
-    XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
-    
+        SceneCB cb;
+        XMStoreFloat4x4(&cb.world, XMMatrixTranspose(world));
+        XMStoreFloat4x4(&cb.view, XMMatrixTranspose(view));
+        XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(proj));
 
-
-    //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
-
-    //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
-
-
-    //SceneCBResource = graphicsmemory->AllocateConstant(cb);
+        SceneCBResource = graphicsmemory->AllocateConstant(cb);   // ← 古いCBの代わりに最新を確保
 
     //�萔�o�b�t�@�̍쐬(DIrectXTK12Assimp�Œǉ�)
 
@@ -153,53 +185,38 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
 }
 
 
-//(DIrectXTK12Assimp�Œǉ�)
-void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod* DR) {
-
-
+void DirectXTK12MeshShader::Draw(GraphicsMemory* graphic, DX::DeviceResourcesMod* DR)
+{
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
-
     resourceUpload.Begin();
-    if (vertices.empty() || indices.empty()) {
-        OutputDebugStringA("Vertices or indices buffer is empty.\n");
-        return;
-    }
 
-    auto commandList = DR->GetCommandList();
-    auto renderTarget = DR->GetRenderTarget();
-    if (!commandList) {
-        OutputDebugStringA("Command list is null.\n");
-        return;
-    }
+    if (vertices.empty() || indices.empty()) return;
 
-    
-    
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    auto* commandList = DR->GetCommandList();
 
-
-
-    // ���[�g�V�O�l�`���ݒ�
+    // ルートシグネチャ
     commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-    //2024/12/30/9:42
-    commandList->SetGraphicsRootConstantBufferView(0, SceneCBResource.GpuAddress());
+    // CBV（b0）: 既存のまま
+    commandList->SetGraphicsRootConstantBufferView(ConstantBuffer, SceneCBResource.GpuAddress());
 
-    // �p�C�v���C���X�e�[�g�ݒ�
+    // パイプライン（MS/PS）
     commandList->SetPipelineState(m_pipelineState.Get());
 
-   
+    // ★ SRVヒープのセット
+    ID3D12DescriptorHeap* heaps[] = { m_heaps.Get()};
+    commandList->SetDescriptorHeaps(1, heaps);
 
-    // Only need one threadgroup to draw a single triangle.
+    // ★ t0（頂点）からのテーブルをバインド（t0=頂点, t1=インデックス）// t0-t1 テーブルをセット
+    auto gpuStart = m_heaps->GetGPUDescriptorHandleForHeapStart();
+    commandList->SetGraphicsRootDescriptorTable(1, gpuStart);
+    // メッシュを 1 グループだけディスパッチ
     commandList->DispatchMesh(1, 1, 1);
-
-    auto uploadResourcesFinished = resourceUpload.End(
-        DR->GetCommandQueue());
     
-   
-    PIXEndEvent();
-    
-    uploadResourcesFinished.wait();
+    auto fini = resourceUpload.End(DR->GetCommandQueue());
+    fini.wait();
 }
+
 using Microsoft::WRL::ComPtr;
 Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphicsPipelineState(
     DX::DeviceResourcesMod* devResources,
@@ -237,8 +254,14 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12MeshShader::CreateGraphic
 
  
     // 1) ルートシグネチャ -------------------------------------------------
-    CD3DX12_ROOT_PARAMETER1 rootParams[1] = {};
-    rootParams[ConstantBuffer].InitAsConstantBufferView(0, 0);
+    CD3DX12_ROOT_PARAMETER1 rootParams[2] = {};
+    // CreateGraphicsPipelineState内
+    CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*NumDescriptors*/2, /*baseShaderRegister*/0);
+
+   
+    rootParams[0].InitAsConstantBufferView(0);            // b0 : SceneCB
+    rootParams[1].InitAsDescriptorTable(1, ranges);       // t0-t1 : SRVテーブル
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc;
     rsDesc.Init_1_1(_countof(rootParams), rootParams,

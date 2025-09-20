@@ -82,9 +82,10 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
 
 
     //(DirectXTK12Assimp‚Å’Ç‰Á)
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPosition) * vertices.size();
+   // DirectXTK12Spehere.cpp
+    m_vertexBufferView.BufferLocation = m_vertexBuffer.GpuAddress();
+    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionNormal);
+    m_vertexBufferView.SizeInBytes = UINT(sizeof(DirectX::VertexPositionNormal) * vertices.size()); // ©•K‚¸VertexPositionNormal‚Å‘µ‚¦‚é
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;

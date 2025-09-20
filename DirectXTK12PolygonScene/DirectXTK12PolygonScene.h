@@ -38,12 +38,12 @@ public:
 
 
 	//バッファ
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
 
+	
+
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
-	std::vector<DirectX::VertexPosition> vertices;
+	std::vector<DirectX::VertexPositionNormal> vertices;
 	std::vector<unsigned short> indices;
 
 	DirectX::XMMATRIX modelmat;
@@ -51,6 +51,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;//新規追加
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;//新規追加
 	DirectX::GraphicsResource SceneCBResource;//新規追加
+	SharedGraphicsResource m_vertexBuffer;
+	SharedGraphicsResource m_indexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;//新規追加
 };
 

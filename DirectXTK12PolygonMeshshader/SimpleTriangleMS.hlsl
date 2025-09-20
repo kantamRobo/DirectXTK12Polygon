@@ -1,60 +1,66 @@
 //--------------------------------------------------------------------------------------
-// SimpleTriangleMS.hlsl
-//
-// Advanced Technology Group (ATG)
-// Copyright (C) Microsoft Corporation. All rights reserved.
+// SimpleTriangleMS.hlsl (SRV バインド版 / MS)
 //--------------------------------------------------------------------------------------
-
 #include "Common.hlsli"
 
-// Hardcoded screen-space triangle positions, colors, & indices
-static const float4 s_Positions[3] =
+// C++ 側のルートシグネチャ前提: b0=CBV, t0=頂点SRV, t1=インデックスSRV
+// （C++ で SetGraphicsRootConstantBufferView(b0), SetGraphicsRootDescriptorTable(t0-t1) する）
+
+// 最低限の定数バッファ（行列は必要に応じて調整）
+struct SceneCB
 {
-    float4(-0.5f, -0.5f, 0.5f, 1.0f),
-    float4(0.0f, 0.5f, 0.5f, 1.0f),
-    float4(0.5f, -0.5f, 0.5f, 1.0f),
+    float4x4 World;
+    float4x4 View;
+    float4x4 Proj;
 };
+ConstantBuffer<SceneCB> gCB : register(b0);
 
-static const float4 s_Color[3] =
+// 頂点/インデックスを SRV から読む
+struct VertexPosition
 {
-    float4(1.0, 0.0, 0.0, 1.0f),
-    float4(0.0, 1.0, 0.0, 1.0f),
-    float4(0.0, 0.0, 1.0, 1.0f),
-};
+    float3 pos;
+}; // C++側の VertexPosition と一致させる
+StructuredBuffer<VertexPosition> gVertices : register(t0);
+StructuredBuffer<uint> gIndices : register(t1);
 
-static const uint3 s_Triangle = uint3(0, 1, 2);
-
-[RootSignature("")]
-[NumThreads(32, 1, 1)]
+// 出力（Common.hlsli 側の VertexOut を想定：Position, Color を持つ）
+[NumThreads(1, 1, 1)]
 [OutputTopology("triangle")]
 void main(
-    uint gtid : SV_GroupThreadID,
+    uint3 tid : SV_DispatchThreadID,
     out indices uint3 tris[1],
     out vertices VertexOut verts[3]
 )
 {
-    // SetMeshOutputCounts(numVerts, numPrims) 
-    // - Mandatory intrinsics function call in Mesh Shaders
-    // - Must be called from non-divergent codepath
-    // - Assumes threadgroup constant values (reads from lane 0)
-    // - Must be <= length of indices & vertices arrays.
-    SetMeshOutputCounts(3, 1); // Set the correct counts for a triangle: 3 verts & 1 primitive
+    // 今回は「先頭の 3 インデックスで三角形 1 枚」を吐く最小例
+    // ※可変メッシュにするなら別途インデックス数/プリミティブ数を引数や定数で渡してください
+    SetMeshOutputCounts(3, 1);
 
-    // Only 3 verts so use first 3 threads to process & export.
-    if (gtid < 3)
+    // lane 0 だけで確定的に処理（分岐を避けるなら Wave 内判定でも良い）
+    if (tid.x == 0)
     {
-        VertexOut vout;
-        vout.Position = s_Positions[gtid];
-        vout.Color = s_Color[gtid];
+        // 読み出し
+        const uint i0 = gIndices[0];
+        const uint i1 = gIndices[1];
+        const uint i2 = gIndices[2];
 
-        // Write out vertex data to the 'vertices' array.
-        verts[gtid] = vout;
-    }
+        float4 p0 = float4(gVertices[i0].pos, 1.0);
+        float4 p1 = float4(gVertices[i1].pos, 1.0);
+        float4 p2 = float4(gVertices[i2].pos, 1.0);
 
-    // Only 1 prim so use first thread to process & export.
-    if (gtid < 1)
-    {
-        // Write out index data to the 'indices' array.
-        tris[gtid] = s_Triangle;
+        // MVP
+        const float4x4 VP = mul(gCB.View, gCB.Proj);
+        const float4x4 MVP = mul(gCB.World, VP);
+
+        // 頂点（白固定。必要なら SRV から色を読む構造に拡張して下さい）
+        verts[0].Position = mul(p0, MVP);
+        verts[0].Color = float4(1, 1, 1, 1);
+        verts[1].Position = mul(p1, MVP);
+        verts[1].Color = float4(1, 1, 1, 1);
+        verts[2].Position = mul(p2, MVP);
+        verts[2].Color = float4(1, 1, 1, 1);
+
+        // 三角形 1 枚
+        tris[0] = uint3(0, 1, 2);
     }
 }
