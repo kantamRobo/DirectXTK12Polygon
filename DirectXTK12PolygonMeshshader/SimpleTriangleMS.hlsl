@@ -22,24 +22,18 @@ struct VertexPosition
 }; // C++側の VertexPosition と一致させる
 StructuredBuffer<VertexPosition> gVertices : register(t0);
 StructuredBuffer<uint> gIndices : register(t1);
-
-// 出力（Common.hlsli 側の VertexOut を想定：Position, Color を持つ）
+// SimpleTriangleMS.hlsl
 [NumThreads(1, 1, 1)]
 [OutputTopology("triangle")]
 void main(
-    uint3 tid : SV_DispatchThreadID,
+    uint3 gtid : SV_GroupThreadID, // ← SV_DispatchThreadID ではなくこちら
     out indices uint3 tris[1],
     out vertices VertexOut verts[3]
 )
 {
-    // 今回は「先頭の 3 インデックスで三角形 1 枚」を吐く最小例
-    // ※可変メッシュにするなら別途インデックス数/プリミティブ数を引数や定数で渡してください
     SetMeshOutputCounts(3, 1);
-
-    // lane 0 だけで確定的に処理（分岐を避けるなら Wave 内判定でも良い）
-    if (tid.x == 0)
+    if (gtid.x == 0)
     {
-        // 読み出し
         const uint i0 = gIndices[0];
         const uint i1 = gIndices[1];
         const uint i2 = gIndices[2];
@@ -48,21 +42,16 @@ void main(
         float4 p1 = float4(gVertices[i1].pos, 1.0);
         float4 p2 = float4(gVertices[i2].pos, 1.0);
 
-        // MVP
-        const float4x4 MVP = mul(gCB.Proj, mul(gCB.View, gCB.World));
+        // 右掛け（C++ 側で World/View/Proj を転置しているため）
+        float4x4 WVP = mul(gCB.World, mul(gCB.View, gCB.Proj));
+        verts[0].Position = mul(p0, WVP);
+        verts[1].Position = mul(p1, WVP);
+        verts[2].Position = mul(p2, WVP);
 
-        // 頂点（白固定。必要なら SRV から色を読む構造に拡張して下さい）
-         // ワールド変換、ビュー変換、プロジェクション変換を適用
-        
         verts[0].Color = float4(1, 1, 1, 1);
         verts[1].Color = float4(1, 1, 1, 1);
         verts[2].Color = float4(1, 1, 1, 1);
 
-        // (2) ベクトルは左ではなく右から掛ける
-        verts[0].Position = p0;
-        verts[1].Position = p1;
-        verts[2].Position = p2;
-        // 三角形 1 枚
         tris[0] = uint3(0, 1, 2);
     }
 }

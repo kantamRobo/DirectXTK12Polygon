@@ -159,7 +159,7 @@ HRESULT DirectXTK12MeshShader::CreateBuffer(DirectX::GraphicsMemory* graphicsmem
    
         using namespace DirectX;
         XMMATRIX world = XMMatrixIdentity();
-        XMVECTOR eye = XMVectorSet(2, 2, -2, 0);
+        XMVECTOR eye = XMVectorSet(0, 0, -2, 0);
         XMVECTOR focus = XMVectorSet(0, 0, 0, 0);
         XMVECTOR up = XMVectorSet(0, 1, 0, 0);
 

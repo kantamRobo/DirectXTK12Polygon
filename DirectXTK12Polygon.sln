@@ -13,8 +13,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonTessellat
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonTexture", "DirectXTK12PolygonTexture\DirectXTK12PolygonTexture.vcxproj", "{28815415-7450-4B41-9448-6E89AB909D56}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12_PolygonMeshShader_Scene", "DirectXTK12_PolygonMeshShader_Scene\DirectXTK12_PolygonMeshShader_Scene.vcxproj", "{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12PolygonDefferdShading", "DirectXTK12PolygonDefferdShading\DirectXTK12PolygonDefferdShading.vcxproj", "{CB8DB9C6-C751-4167-996C-601A81E38FF1}"
 EndProject
 Global
@@ -65,14 +63,6 @@ Global
 		{28815415-7450-4B41-9448-6E89AB909D56}.Release|x64.Build.0 = Release|x64
 		{28815415-7450-4B41-9448-6E89AB909D56}.Release|x86.ActiveCfg = Release|Win32
 		{28815415-7450-4B41-9448-6E89AB909D56}.Release|x86.Build.0 = Release|Win32
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Debug|x64.ActiveCfg = Debug|x64
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Debug|x64.Build.0 = Debug|x64
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Debug|x86.ActiveCfg = Debug|Win32
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Debug|x86.Build.0 = Debug|Win32
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Release|x64.ActiveCfg = Release|x64
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Release|x64.Build.0 = Release|x64
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Release|x86.ActiveCfg = Release|Win32
-		{9CE1A5DA-2819-4442-AE67-5B1EEC69CDE0}.Release|x86.Build.0 = Release|Win32
 		{CB8DB9C6-C751-4167-996C-601A81E38FF1}.Debug|x64.ActiveCfg = Debug|x64
 		{CB8DB9C6-C751-4167-996C-601A81E38FF1}.Debug|x64.Build.0 = Debug|x64
 		{CB8DB9C6-C751-4167-996C-601A81E38FF1}.Debug|x86.ActiveCfg = Debug|Win32
