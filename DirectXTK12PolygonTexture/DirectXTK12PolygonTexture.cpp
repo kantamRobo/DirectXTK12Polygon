@@ -12,6 +12,8 @@ using namespace DirectX;
 void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
 {
     auto device = DR->GetD3DDevice();
+	DirectX::ResourceUploadBatch resourceUpload(device);
+	resourceUpload.Begin();
 
     DX::ThrowIfFailed(
         CreateWICTextureFromFile(device, resourceUpload,L"C:\\Users\\hatte\\OneDrive\\Pictures\\Screenshots\\スクリーンショット 2025-07-23 172311.png",            tex.ReleaseAndGetAddressOf(), true
@@ -32,7 +34,7 @@ void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
 
     
     
-   
+	resourceUpload.End(DR->GetCommandQueue());
    
 
     
