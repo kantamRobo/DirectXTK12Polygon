@@ -41,7 +41,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;//V‹K’Ç‰Á
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;//V‹K’Ç‰Á
 	Microsoft::WRL::ComPtr<ID3D12Resource> tex;
-
+	std::unique_ptr<DirectX::CommonStates> states;
 	DirectX::GraphicsResource SceneCBResource;//V‹K’Ç‰Á
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 

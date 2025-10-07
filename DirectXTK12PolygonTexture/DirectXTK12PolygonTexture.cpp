@@ -12,10 +12,6 @@ using namespace DirectX;
 void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
 {
     auto device = DR->GetD3DDevice();
- 
-    ResourceUploadBatch resourceUpload(device);
-
-    resourceUpload.Begin();
 
     DX::ThrowIfFailed(
         CreateWICTextureFromFile(device, resourceUpload,L"C:\\Users\\hatte\\OneDrive\\Pictures\\Screenshots\\スクリーンショット 2025-07-23 172311.png",            tex.ReleaseAndGetAddressOf(), true
@@ -33,23 +29,12 @@ void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
         m_srvDescriptor->GetCpuHandle(0)
     );
 
-    // LinearClamp
-    D3D12_SAMPLER_DESC desc = { D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        0, D3D12_MAX_MAXANISOTROPY, D3D12_COMPARISON_FUNC_NEVER,
-        { 0, 0, 0, 0 }, 0, D3D12_FLOAT32_MAX };
 
+    
+    
+   
+   
 
-    // ヒープの0番目に書き込む
-    device->CreateSampler(
-        &desc,
-        m_samplerDescriptor->GetCpuHandle(0));
-    auto uploadResourcesFinished = resourceUpload.End(DR->GetCommandQueue());
-
-    // Wait for the upload thread to terminate
-    uploadResourcesFinished.wait();
     
 }
 enum Descriptors
@@ -62,6 +47,7 @@ enum Descriptors
 };
 HRESULT DirectXTK12PolygonTexture::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
 {
+	
 
     // 頂点構造体は VertexPositionColorTexture
     
@@ -216,6 +202,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTexture::CreateGra
     const std::wstring& pixelShaderPath)
 {
     auto device = deviceresources->GetD3DDevice();
+  
     // シェーダーをコンパイル
     ComPtr<ID3DBlob> vertexShader;
     ComPtr<ID3DBlob> pixelShader;
