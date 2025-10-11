@@ -62,8 +62,11 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
     resourceUpload.Begin();
    
 
-	m_vertexBuffer = graphicsmemory->Allocate(vertices.size() , sizeof(DirectX::VertexPositionNormal) * vertices.size());
-	m_indexBuffer = graphicsmemory->Allocate(indices.size() , sizeof(unsigned short)* indices.size());
+	m_vertexBuffer = graphicsmemory->Allocate(sizeof(DirectX::VertexPositionNormal) * vertices.size());
+    memcpy(m_vertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPositionNormal) * vertices.size());
+
+	m_indexBuffer = graphicsmemory->Allocate( sizeof(unsigned short)* indices.size());
+    memcpy(m_indexBuffer.Memory(), indices.data(), sizeof(unsigned short) * indices.size());
 
 
 
@@ -77,17 +80,18 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
 
-
+    auto sz = deviceResources->GetOutputSize();
 
     DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 
-    DirectX::XMVECTOR eye = DirectX::XMVectorSet(2.0f, 2.0f, -2.0f, 0.0f);
-    DirectX::XMVECTOR focus = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-    DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMVECTOR eye = XMVectorSet(0.0f, 0.0f, -2.0f, 0.0f);  // ãóó£ÇÕçDÇ›Ç≈ -1.5fÅ`-5.0f Ç≠ÇÁÇ¢
+    XMVECTOR focus = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
     DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eye, focus, up);
 
     constexpr float fov = DirectX::XMConvertToRadians(45.0f);
-    float    aspect = (1200 / 600);
+    float aspect = float(sz.right - sz.left) / float(sz.bottom - sz.top);
     float    nearZ = 0.1f;
     float    farZ = 100.0f;
     DirectX::XMMATRIX projMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
