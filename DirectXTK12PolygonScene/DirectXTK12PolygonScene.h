@@ -1,5 +1,15 @@
 #pragma once
-#include <DeviceResources.h>
+#include <DescriptorHeap.h>
+#include <GraphicsMemory.h>
+#include "CommonStates.h"
+#include <VertexTypes.h>
+#include <wrl.h>
+#include <vector>
+#include <d3d12.h>
+#include <memory>
+#include "DeviceResources.h"
+#include <GraphicsMemory.h>
+using namespace DX;
 struct SceneCB {
 	DirectX::XMFLOAT4X4 world;
 	DirectX::XMFLOAT4X4 view;
@@ -51,8 +61,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;//V‹K’Ç‰Á
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;//V‹K’Ç‰Á
 	DirectX::GraphicsResource SceneCBResource;//V‹K’Ç‰Á
-	SharedGraphicsResource m_vertexBuffer;
-	SharedGraphicsResource m_indexBuffer;
+	DirectX::SharedGraphicsResource m_vertexBuffer;
+	DirectX::SharedGraphicsResource m_indexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;//V‹K’Ç‰Á
 };
 

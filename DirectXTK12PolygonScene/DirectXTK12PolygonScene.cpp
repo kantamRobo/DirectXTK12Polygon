@@ -1,5 +1,6 @@
-#include "pch.h"
-#include "DirectXTK12PolygonScene.h"
+
+
+
 
 
 
@@ -15,11 +16,14 @@
 
 
 #include <DirectXMath.h>
-#include "pch.h"
 #include <ResourceUploadBatch.h>
-#include "DirectXTK12PolygonScene.h"
 #include <d3dcompiler.h>
 #include <d3dx12.h>
+#include "DirectXTK12PolygonScene.h"
+#include <EffectPipelineStateDescription.h>
+#include <DirectXHelpers.h>
+
+using namespace DX;
 enum Descriptors
 {
     WindowsLogo,
@@ -29,9 +33,9 @@ enum Descriptors
     Count
 };
 using namespace DirectX;
-HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
+HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DeviceResources* deviceResources, int height, int width)
 {
-
+    DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
     // 三角形の頂点データ
 
     vertices.resize(3);
@@ -52,33 +56,15 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
     indices[0] = 0;
     indices[1] = 1;
     indices[2] = 2;
-    DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
+    
+   
 
     resourceUpload.Begin();
-    // 頂点バッファの作成
-    DX::ThrowIfFailed(
-        DirectX::CreateStaticBuffer(
-            deviceResources->GetD3DDevice(),
-            resourceUpload,
-            vertices.data(),
-            static_cast<int>(vertices.size()),
-            sizeof(DirectX::VertexPosition),
-            D3D12_RESOURCE_STATE_COMMON,
-            m_vertexBuffer.GetAddressOf()
-        )
-    );
-    // インデックスバッファの作成
-    DX::ThrowIfFailed(
-        DirectX::CreateStaticBuffer(
-            deviceResources->GetD3DDevice(),
-            resourceUpload,
-            indices.data(),
-            indices.size(),
-            sizeof(unsigned short),
-            D3D12_RESOURCE_STATE_COMMON,
-            m_indexBuffer.GetAddressOf()
-        )
-    );
+   
+
+	m_vertexBuffer = graphicsmemory->Allocate(vertices.size() , sizeof(DirectX::VertexPositionNormal) * vertices.size());
+	m_indexBuffer = graphicsmemory->Allocate(indices.size() , sizeof(unsigned short)* indices.size());
+
 
 
     //(DirectXTK12Assimpで追加)
@@ -87,7 +73,7 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionNormal);
     m_vertexBufferView.SizeInBytes = UINT(sizeof(DirectX::VertexPositionNormal) * vertices.size()); // ←必ずVertexPositionNormalで揃える
 
-    m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+	m_indexBufferView.BufferLocation = m_indexBuffer.GpuAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
     m_indexBufferView.SizeInBytes = sizeof(unsigned short) * indices.size();
 
@@ -254,7 +240,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonScene::CreateGraph
     // use all parameters
     rsigDesc.Init(static_cast<UINT>(std::size(rootParameters)), rootParameters, 0, nullptr, rootSignatureFlags);
 
-    DX::ThrowIfFailed(DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf()));
+   DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf());
  
     //https://github.com/microsoft/DirectXTK12/wiki/PSOs,-Shaders,-and-Signatures
     // 
