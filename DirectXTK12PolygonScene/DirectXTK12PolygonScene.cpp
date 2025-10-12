@@ -107,7 +107,7 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
 
-    DirectX::GraphicsResource SceneCBResource;//新規追加
+   
     SceneCBResource = graphicsmemory->AllocateConstant(cb);
 
     //定数バッファの作成(DIrectXTK12Assimpで追加)
