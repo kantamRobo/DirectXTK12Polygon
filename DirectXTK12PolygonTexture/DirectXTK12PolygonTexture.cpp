@@ -96,7 +96,7 @@ HRESULT DirectXTK12PolygonTexture::CreateBuffer(DirectX::GraphicsMemory* graphic
             resourceUpload,
             vertices.data(),
             static_cast<int>(vertices.size()),
-            sizeof(DirectX::VertexPositionColorTexture),
+            sizeof(DirectX::VertexPositionTexture),
             D3D12_RESOURCE_STATE_COMMON,
             m_vertexBuffer.GetAddressOf()
         )
@@ -117,8 +117,8 @@ HRESULT DirectXTK12PolygonTexture::CreateBuffer(DirectX::GraphicsMemory* graphic
 
     //(DirectXTK12Assimp‚Å’Ç‰Á)
     m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionColorTexture);
-    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionColorTexture) * vertices.size();
+    m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionTexture);
+    m_vertexBufferView.SizeInBytes = sizeof(DirectX::VertexPositionTexture) * vertices.size();
 
     m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
@@ -261,7 +261,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTexture::CreateGra
 
     m_layout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, 0,                                 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT,  0, D3D12_APPEND_ALIGNED_ELEMENT,      D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+       
         { "TEXCOORD",0, DXGI_FORMAT_R32G32_FLOAT,        0, D3D12_APPEND_ALIGNED_ELEMENT,      D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 

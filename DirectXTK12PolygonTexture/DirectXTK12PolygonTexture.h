@@ -33,7 +33,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
-	std::vector<DirectX::VertexPositionColorTexture> vertices;
+	std::vector<DirectX::VertexPositionTexture> vertices;
 	std::vector<unsigned short> indices;
 
 	DirectX::XMMATRIX modelmat;
