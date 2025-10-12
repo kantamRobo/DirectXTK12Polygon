@@ -34,13 +34,15 @@ void DirectXTK12PolygonTexture::CreateTexture(DX::DeviceResources* DR)
     );
 
     // LinearClamp
+    
+    
     D3D12_SAMPLER_DESC desc = { D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         0, D3D12_MAX_MAXANISOTROPY, D3D12_COMPARISON_FUNC_NEVER,
         { 0, 0, 0, 0 }, 0, D3D12_FLOAT32_MAX };
-
+        
 
     // ヒープの0番目に書き込む
     device->CreateSampler(
@@ -280,20 +282,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTexture::CreateGra
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-        D3D12_STATIC_SAMPLER_DESC sampler = {};
-        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.MipLODBias = 0;
-        sampler.MaxAnisotropy = 0;
-        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-        sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-        sampler.MinLOD = 0.0f;
-        sampler.MaxLOD = D3D12_FLOAT32_MAX;
-        sampler.ShaderRegister = 0;
-        sampler.RegisterSpace = 0;
-        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+       
 
         
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
@@ -336,6 +325,8 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonTexture::CreateGra
             &ranges[1],     // 先ほど定義したレンジ
             D3D12_SHADER_VISIBILITY_PIXEL
         );
+        CD3DX12_STATIC_SAMPLER_DESC sampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
         rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
