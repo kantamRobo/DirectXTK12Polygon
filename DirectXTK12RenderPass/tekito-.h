@@ -13,10 +13,23 @@
 #include <GraphicsMemory.h>
 #include <memory>
 #include <DeviceResources.h>
+#include "RenderTexture.h"
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 inline void ThrowIfFailed(HRESULT hr) { if (FAILED(hr)) throw std::runtime_error("HRESULT failed"); }
 
+
+enum Descriptors
+{
+    SceneTex,
+    Count
+};
+
+enum RTDescriptors
+{
+    OffScreenRT,
+    RTCount
+};
 class RenderPassTwoTriangles {
 public:
     struct InitDesc {
@@ -44,7 +57,7 @@ public:
         BuildRootSig();
         BuildShadersAndPSO();
         BuildGeometry();
-        BuildCB();
+      
         BuildFrameObjects();
     }
 
@@ -72,7 +85,7 @@ public:
             
             
             resourceUpload.Transition(
-                offscree.Get(),
+               m_ScenerenderTexture->GetResource(),
                 D3D12_RESOURCE_STATE_COMMON,
 				D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -111,7 +124,7 @@ public:
 
             // RENDER_TARGET -> COMMON（今回は結果は読み出さないが整合性のため戻す）
             resourceUpload.Transition(
-                g_offscreenRT.Get(),
+               m_ScenerenderTexture->GetResource(),
                 D3D12_RESOURCE_STATE_RENDER_TARGET,
                 D3D12_RESOURCE_STATE_COMMON));
 
@@ -171,9 +184,9 @@ public:
         // RENDER_TARGET -> PRESENT
         {
             resourceUpload.Transition(
-                backBuffer, ,
+                backBuffer,
                 D3D12_RESOURCE_STATE_RENDER_TARGET,
-                D3D12_RESOURCE_STATE_PRESENT));
+                D3D12_RESOURCE_STATE_PRESENT);
 
         }
 
@@ -215,11 +228,12 @@ private:
     UINT                         rtvStride_ = 0;
 
     // Offscreen
-    std::unique_ptr<DX::RenderTexture> m_renderTexture;
+    std::unique_ptr<RenderTexture> m_ScenerenderTexture;
 
     std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
     std::unique_ptr<DirectX::DescriptorHeap> m_renderDescriptors;
-    std::unique_ptr<DirectX::DescriptorHeap> m_renderOffDescriptors;
+    std::unique_ptr<DirectX::DescriptorHeap>  m_rtvHeapOffDescriptors;
+   
     // Pipeline
     ComPtr<ID3D12RootSignature>         rootSig_;
     ComPtr<ID3D12PipelineState>         pso_;
@@ -232,13 +246,15 @@ private:
     D3D12_VERTEX_BUFFER_VIEW vbvA_{}, vbvB_{};
 
     // Constant buffer
-    struct ColorCB { float rgba[4]; };
-    ComPtr<ID3D12Resource> colorCB_;
-    ColorCB* colorCBMapped_ = nullptr;
+    
+    std::unique_ptr<RenderTexture>  backbuffer;
+   
 
 private:
     // ---- 構築系 ----
-    void CreateRTVHeaps() {
+    void CreateRTVHeaps(DX::DeviceResources* DR) {
+		auto device = DR->GetD3DDevice();
+		auto commandList = DR->GetCommandList();
         enum Descriptors
         {
             SceneTex,
@@ -252,10 +268,10 @@ private:
         };
 
             //DirectXTK12の追加ラッパーであるRenderTextureでリソースは生成される
-            (CommitedResourse)
+          
 
-            m_renderTexture = std::make_unique<DX::RenderTexture>(
-                m_deviceResources->GetBackBufferFormat());
+            m_ScenerenderTexture = std::make_unique<RenderTexture>(
+                DR->GetBackBufferFormat());
 
         // RTV ヒープ＆ハンドル（スワップチェーン RTV とは別に 1 枚）
         //これもラッパーを使う
@@ -268,46 +284,36 @@ private:
             RTCount
         };
 
-        m_renderOffDescriptors = std::make_unique<DescriptorHeap>(device,
+        m_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
             RTDescriptors::RTCount);
 
-        device->CreateRenderTargetView(sceneTex.Get(),
+        device->CreateRenderTargetView(m_ScenerenderTexture->GetResource(),
             nullptr,
-            renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
+            m_renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
 
-        auto rtvDescriptor = renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
+        auto rtvDescriptor = m_renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
         commandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, &dsvDescriptor);
 
 
 
     }
 
-    void CreateSwapRTVs() {
-        UINT n = swapchain_->GetDesc1().BufferCount;
-        for (UINT i = 0; i < n; ++i) {
-            ComPtr<ID3D12Resource> buf;
-            ThrowIfFailed(swapchain_->GetBuffer(i, IID_PPV_ARGS(&buf)));
-            auto h = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvHeapSwap_->GetCPUDescriptorHandleForHeapStart(),
-                i, rtvStride_);
-            device_->CreateRenderTargetView(buf.Get(), nullptr, h);
+    void CreateOffscreenRT(DX::DeviceResources* DR) {
+		auto device = DR->GetD3DDevice();
+		auto commandList = DR->GetCommandList();
 
-            //DeviceResourcesを使う
-        }
-    }
-
-    void CreateOffscreenRT() {
         // テクスチャ
-        g_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
+        m_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
             RTDescriptors::RTCount);
 
         // RTV
-        device->CreateRenderTargetView(sceneTex.Get(),
+        device->CreateRenderTargetView(m_ScenerenderTexture->GetResource(),
             nullptr,
-            renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
+            m_ScenerenderTexture->GetCpuHandle(RTDescriptors::SceneRT));
         auto rtvDescriptor = renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
         commandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, &dsvDescriptor);
 
