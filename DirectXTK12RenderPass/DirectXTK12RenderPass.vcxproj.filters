@@ -22,6 +22,7 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="tekito-.h" />
+    <ClInclude Include="RenderTexture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -30,6 +31,7 @@
     <ClCompile Include="DeviceResources.cpp">
       <Filter>Common</Filter>
     </ClCompile>
+    <ClCompile Include="RenderTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc" />

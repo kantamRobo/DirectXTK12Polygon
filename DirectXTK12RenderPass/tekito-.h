@@ -12,6 +12,7 @@
 #include <DescriptorHeap.h>
 #include <GraphicsMemory.h>
 #include <memory>
+#include <DeviceResources.h>
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 inline void ThrowIfFailed(HRESULT hr) { if (FAILED(hr)) throw std::runtime_error("HRESULT failed"); }
@@ -54,28 +55,26 @@ public:
     }
 
     // 1フレーム描画：2 RenderPass を連続実行
-    void Render() {
-        // フレームリソース（シンプルに都度リセット）
-        ThrowIfFailed(cmdAlloc_->Reset());
-        ThrowIfFailed(cmdList_->Reset(cmdAlloc_.Get(), pso_.Get()));
+    void Render(DX::DeviceResources* DR) {
+		auto device = DR->GetD3DDevice();
+       auto cmdList4 = DR->GetCommandList();
+        ResourceUploadBatch resourceUpload(device);
 
+        resourceUpload.Begin();
+        
         // 共通セット
         cmdList_->SetGraphicsRootSignature(rootSig_.Get());
         cmdList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         // ===== Pass 1 : Offscreen (赤い三角) =====
         {
-            ResourceUploadBatch resourceUpload(device);
-
-            resourceUpload.Begin();
-            // COMMON -> RENDER_TARGET
-              // 必要ならリソースバリア（COMMON→RENDER_TARGET）
-            CD3DX12_RESOURCE_BARRIER toRT = CD3DX12_RESOURCE_BARRIER::Transition(
-                g_offscreenRT.Get(),
+           
+            
+            
+            resourceUpload.Transition(
+                offscree.Get(),
                 D3D12_RESOURCE_STATE_COMMON,
-                D3D12_RESOURCE_STATE_RENDER_TARGET);
-            cmdList4->ResourceBarrier(1, &toRT);
-
+				D3D12_RESOURCE_STATE_RENDER_TARGET);
 
             D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
             beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
@@ -128,7 +127,7 @@ public:
         // PRESENT -> RENDER_TARGET
         {
             resourceUpload.Transition(
-                backBuffer, ,
+                backBuffer.Get(),
                 D3D12_RESOURCE_STATE_COMMON
                 D3D12_RESOURCE_STATE_RENDER_TARGET));
 
@@ -220,7 +219,7 @@ private:
 
     std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
     std::unique_ptr<DirectX::DescriptorHeap> m_renderDescriptors;
-
+    std::unique_ptr<DirectX::DescriptorHeap> m_renderOffDescriptors;
     // Pipeline
     ComPtr<ID3D12RootSignature>         rootSig_;
     ComPtr<ID3D12PipelineState>         pso_;
@@ -269,7 +268,7 @@ private:
             RTCount
         };
 
-        g_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
+        m_renderOffDescriptors = std::make_unique<DescriptorHeap>(device,
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
             RTDescriptors::RTCount);
