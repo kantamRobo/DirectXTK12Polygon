@@ -70,7 +70,7 @@ public:
            beg.Clear.ClearValue.Color[2] = 0.1f;
            beg.Clear.ClearValue.Color[3] = 1.0f;
            D3D12_RENDER_PASS_ENDING_ACCESS end = {};
-           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
+           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
            D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
            rtd.cpuDescriptor = m_renderDescriptors->GetCpuHandle(0);
            rtd.BeginningAccess = beg;
@@ -110,7 +110,7 @@ public:
            beg.Clear.ClearValue.Color[2] = 0.12f;
            beg.Clear.ClearValue.Color[3] = 1.0f;
            D3D12_RENDER_PASS_ENDING_ACCESS end = {};
-           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
+           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
            D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
            rtd.cpuDescriptor = DR->GetRenderTargetView();
            rtd.BeginningAccess = beg;
