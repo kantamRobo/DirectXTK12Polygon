@@ -43,7 +43,7 @@ public:
         std::wstring                  shaderFile = L"Triangle.hlsl";
     };
 
-    void Initialize(const InitDesc& d) {
+    void Initialize(DX::DeviceResources* DR,const InitDesc& d) {
         device_ = d.device;
         queue_ = d.queue;
         swapchain_ = d.swapchain;
@@ -52,8 +52,8 @@ public:
         height_ = d.height;
         shaderFile_ = d.shaderFile;
 
-        CreateRTVHeaps();
-        CreateOffscreenRT();
+        CreateRTVHeaps(DR);
+        CreateOffscreenRT(DR);
         BuildRootSig();
         BuildShadersAndPSO();
         BuildGeometry();
@@ -62,148 +62,113 @@ public:
     }
 
     // リサイズ対応（バックバッファのサイズ変更時に呼ぶ）
-    void OnResize(UINT w, UINT h) {
+    void OnResize(DX::DeviceResources* DR,UINT w, UINT h) {
         width_ = w; height_ = h;
-        CreateOffscreenRT(); // サイズに合わせて作り直し
+        CreateOffscreenRT(DR); // サイズに合わせて作り直し
     }
 
     // 1フレーム描画：2 RenderPass を連続実行
     void Render(DX::DeviceResources* DR) {
 		auto device = DR->GetD3DDevice();
        auto cmdList4 = DR->GetCommandList();
-        ResourceUploadBatch resourceUpload(device);
+       // フレームリソース（シンプルに都度リセット）
+       ResourceUploadBatch resourceUpload(device);
 
-        resourceUpload.Begin();
-        
-        // 共通セット
-        cmdList_->SetGraphicsRootSignature(rootSig_.Get());
-        cmdList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+       resourceUpload.Begin();
 
-        // ===== Pass 1 : Offscreen (赤い三角) =====
-        {
+       // 共通セット
+       cmdList_->SetGraphicsRootSignature(rootSig_.Get());
+       cmdList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+       // ===== Pass 1 : Offscreen (赤い三角) =====
+       {
+           // COMMON -> RENDER_TARGET
+           resourceUpload.Transition(
+               offscreenRT_->GetResource(), D3D12_RESOURCE_STATE_COMMON,
+               D3D12_RESOURCE_STATE_RENDER_TARGET);
            
-            
-            
-            resourceUpload.Transition(
-               m_ScenerenderTexture->GetResource(),
-                D3D12_RESOURCE_STATE_COMMON,
-				D3D12_RESOURCE_STATE_RENDER_TARGET);
+           D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
+           beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+           beg.Clear.ClearValue.Format = rtvFormat_;
+           beg.Clear.ClearValue.Color[0] = 0.1f;
+           beg.Clear.ClearValue.Color[1] = 0.1f;
+           beg.Clear.ClearValue.Color[2] = 0.1f;
+           beg.Clear.ClearValue.Color[3] = 1.0f;
+           D3D12_RENDER_PASS_ENDING_ACCESS end = {};
+           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
+           D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
+           rtd.cpuDescriptor = m_renderDescriptors->GetCpuHandle(0);
+           rtd.BeginningAccess = beg;
+           rtd.EndingAccess = end;
+           cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
+           D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
+           D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
+           cmdList_->RSSetViewports(1, &vp);
+           cmdList_->RSSetScissorRects(1, &sc);
+           // 色：赤
+           colorCBMapped_->rgba[0] = 1.0f; colorCBMapped_->rgba[1] = 0.2f;
+           colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
+           cmdList_->SetGraphicsRootConstantBufferView(0, colorCB_.GpuAddress());
+           cmdList_->IASetVertexBuffers(0, 1, &vbvA_);
+           cmdList_->DrawInstanced(3, 1, 0, 0);
+           cmdList4_->EndRenderPass();
+           // RENDER_TARGET -> COMMON（今回は結果は読み出さないが整合性のため戻す）
+           resourceUpload.Transition(
 
-            D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
-            beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-            beg.Clear.ClearValue.Format = rtvFormat_;
-            beg.Clear.ClearValue.Color[0] = 0.1f;
-            beg.Clear.ClearValue.Color[1] = 0.1f;
-            beg.Clear.ClearValue.Color[2] = 0.1f;
-            beg.Clear.ClearValue.Color[3] = 1.0f;
+               offscreenRT_->GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+       }
+       // ===== Pass 2 : BackBuffer (緑の三角) =====
+       UINT backIdx = swapchain_->GetCurrentBackBufferIndex();
+       ComPtr<ID3D12Resource> backBuffer;
+       ThrowIfFailed(swapchain_->GetBuffer(backIdx, IID_PPV_ARGS(&backBuffer)));
+       auto backRTV = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvHeapSwap_->GetCPUDescriptorHandleForHeapStart(),
+           backIdx, rtvStride_);
+       // PRESENT -> RENDER_TARGET
+       {
+           resourceUpload.Transition(
+               backBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+       }
+       {
+           D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
+           beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+           beg.Clear.ClearValue.Format = rtvFormat_;
+           beg.Clear.ClearValue.Color[0] = 0.05f;
+           beg.Clear.ClearValue.Color[1] = 0.05f;
+           beg.Clear.ClearValue.Color[2] = 0.12f;
+           beg.Clear.ClearValue.Color[3] = 1.0f;
+           D3D12_RENDER_PASS_ENDING_ACCESS end = {};
+           end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
+           D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
+           rtd.cpuDescriptor = backRTV;
+           rtd.BeginningAccess = beg;
+           rtd.EndingAccess = end;
+           cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
+           D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
+           D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
+           cmdList_->RSSetViewports(1, &vp);
+           cmdList_->RSSetScissorRects(1, &sc);
+           // 色：緑
+           colorCBMapped_->rgba[0] = 0.2f; colorCBMapped_->rgba[1] = 1.0f;
+           colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
+           cmdList_->SetGraphicsRootConstantBufferView(0, colorCB_.GpuAddress());
+           cmdList_->IASetVertexBuffers(0, 1, &vbvB_);
+           cmdList_->DrawInstanced(3, 1, 0, 0);
+           cmdList4_->EndRenderPass();
+       }
+       // RENDER_TARGET -> PRESENT
+       {
+           resourceUpload.Transition(
 
-            D3D12_RENDER_PASS_ENDING_ACCESS end = {};
-            end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
+               backBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+       }
 
-            D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
-            rtd.cpuDescriptor = offscreenRTV_;
-            rtd.BeginningAccess = beg;
-            rtd.EndingAccess = end;
+       auto finish =  resourceUpload.End(DR->GetCommandQueue());
+       ThrowIfFailed(swapchain_->Present(1, 0));
+	   finish.wait();
 
-            cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
 
-            D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
-            D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
-            cmdList_->RSSetViewports(1, &vp);
-            cmdList_->RSSetScissorRects(1, &sc);
-
-            // 色：赤
-            colorCBMapped_->rgba[0] = 1.0f; colorCBMapped_->rgba[1] = 0.2f;
-            colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
-            cmdList_->SetGraphicsRootConstantBufferView(0, colorCB_->GetGPUVirtualAddress());
-
-            cmdList_->IASetVertexBuffers(0, 1, &vbvA_);
-            cmdList_->DrawInstanced(3, 1, 0, 0);
-
-            cmdList4_->EndRenderPass();
-
-            // RENDER_TARGET -> COMMON（今回は結果は読み出さないが整合性のため戻す）
-            resourceUpload.Transition(
-               m_ScenerenderTexture->GetResource(),
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                D3D12_RESOURCE_STATE_COMMON));
-
-        }
-
-        // ===== Pass 2 : BackBuffer (緑の三角) =====
-        UINT backIdx = swapchain_->GetCurrentBackBufferIndex();
-        ComPtr<ID3D12Resource> backBuffer;
-        ThrowIfFailed(swapchain_->GetBuffer(backIdx, IID_PPV_ARGS(&backBuffer)));
-        auto backRTV = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvHeapSwap_->GetCPUDescriptorHandleForHeapStart(),
-            backIdx, rtvStride_);
-
-        // PRESENT -> RENDER_TARGET
-        {
-            resourceUpload.Transition(
-                backBuffer.Get(),
-                D3D12_RESOURCE_STATE_COMMON
-                D3D12_RESOURCE_STATE_RENDER_TARGET));
-
-        }
-
-        {
-            D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
-            beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-            beg.Clear.ClearValue.Format = rtvFormat_;
-            beg.Clear.ClearValue.Color[0] = 0.05f;
-            beg.Clear.ClearValue.Color[1] = 0.05f;
-            beg.Clear.ClearValue.Color[2] = 0.12f;
-            beg.Clear.ClearValue.Color[3] = 1.0f;
-
-            D3D12_RENDER_PASS_ENDING_ACCESS end = {};
-            end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
-
-            D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
-            rtd.cpuDescriptor = backRTV;
-            rtd.BeginningAccess = beg;
-            rtd.EndingAccess = end;
-
-            cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
-
-            D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
-            D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
-            cmdList_->RSSetViewports(1, &vp);
-            cmdList_->RSSetScissorRects(1, &sc);
-
-            // 色：緑
-            colorCBMapped_->rgba[0] = 0.2f; colorCBMapped_->rgba[1] = 1.0f;
-            colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
-            cmdList_->SetGraphicsRootConstantBufferView(0, colorCB_->GetGPUVirtualAddress());
-
-            cmdList_->IASetVertexBuffers(0, 1, &vbvB_);
-            cmdList_->DrawInstanced(3, 1, 0, 0);
-
-            cmdList4_->EndRenderPass();
-        }
-
-        // RENDER_TARGET -> PRESENT
-        {
-            resourceUpload.Transition(
-                backBuffer,
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                D3D12_RESOURCE_STATE_PRESENT);
-
-        }
-
-        ThrowIfFailed(cmdList_->Close());
-        ID3D12CommandList* lists[] = { cmdList_.Get() };
-        queue_->ExecuteCommandLists(1, lists);
-
-        ThrowIfFailed(swapchain_->Present(1, 0));
-        WaitGPU(); // 単純同期
     }
 
 
-
-    // スワップチェーンのRTV（各バックバッファぶん）を作り直したい時に呼ぶ
-    void RebuildSwapchainRTVs() {
-        CreateSwapRTVs();
-    }
 
 private:
     // ---- リソース定義 ----
@@ -228,7 +193,12 @@ private:
     UINT                         rtvStride_ = 0;
 
     // Offscreen
-    std::unique_ptr<RenderTexture> m_ScenerenderTexture;
+        // Offscreen
+    std::unique_ptr<RenderTexture>  offscreenRT_;
+
+        std::unique_ptr<RenderTexture> m_renderTexture;
+    std::unique_ptr<RenderTexture> m_offscreenRT;
+
 
     std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
     std::unique_ptr<DirectX::DescriptorHeap> m_renderDescriptors;
@@ -248,6 +218,11 @@ private:
     // Constant buffer
     
     std::unique_ptr<RenderTexture>  backbuffer;
+    // Constant buffer
+    struct ColorCB { float rgba[4]; };
+   SharedGraphicsResource colorCB_;
+    ColorCB*                        colorCBMapped_ = nullptr;
+	// ---- 内部処理系 ----
    
 
 private:
@@ -267,11 +242,7 @@ private:
             RTCount
         };
 
-            //DirectXTK12の追加ラッパーであるRenderTextureでリソースは生成される
-          
-
-            m_ScenerenderTexture = std::make_unique<RenderTexture>(
-                DR->GetBackBufferFormat());
+         
 
         // RTV ヒープ＆ハンドル（スワップチェーン RTV とは別に 1 枚）
         //これもラッパーを使う
@@ -284,12 +255,8 @@ private:
             RTCount
         };
 
-        m_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
-            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            RTDescriptors::RTCount);
-
-        device->CreateRenderTargetView(m_ScenerenderTexture->GetResource(),
+      
+        device->CreateRenderTargetView(offscreenRT_->GetResource(),
             nullptr,
             m_renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
 
@@ -311,10 +278,10 @@ private:
             RTDescriptors::RTCount);
 
         // RTV
-        device->CreateRenderTargetView(m_ScenerenderTexture->GetResource(),
+        device->CreateRenderTargetView(m_offscreenRT->GetResource(),
             nullptr,
-            m_ScenerenderTexture->GetCpuHandle(RTDescriptors::SceneRT));
-        auto rtvDescriptor = renderDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
+            m_rtvHeapOffDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
+        auto rtvDescriptor = m_rtvHeapOffDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
         commandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, &dsvDescriptor);
 
     }
