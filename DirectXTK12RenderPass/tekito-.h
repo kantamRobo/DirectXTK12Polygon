@@ -43,30 +43,6 @@ public:
         std::wstring                  shaderFile = L"Triangle.hlsl";
     };
 
-    void Initialize(DX::DeviceResources* DR,const InitDesc& d) {
-        device_ = d.device;
-        queue_ = d.queue;
-        swapchain_ = d.swapchain;
-        rtvFormat_ = d.rtvFormat;
-        width_ = d.width;
-        height_ = d.height;
-        shaderFile_ = d.shaderFile;
-
-        CreateRTVHeaps(DR);
-        CreateOffscreenRT(DR);
-        BuildRootSig();
-        BuildShadersAndPSO();
-        BuildGeometry();
-      
-        BuildFrameObjects();
-    }
-
-    // リサイズ対応（バックバッファのサイズ変更時に呼ぶ）
-    void OnResize(DX::DeviceResources* DR,UINT w, UINT h) {
-        width_ = w; height_ = h;
-        CreateOffscreenRT(DR); // サイズに合わせて作り直し
-    }
-
     // 1フレーム描画：2 RenderPass を連続実行
     void Render(DX::DeviceResources* DR) {
 		auto device = DR->GetD3DDevice();
@@ -88,7 +64,7 @@ public:
            
            D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
            beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-           beg.Clear.ClearValue.Format = rtvFormat_;
+           beg.Clear.ClearValue.Format = DR->GetBackBufferFormat();
            beg.Clear.ClearValue.Color[0] = 0.1f;
            beg.Clear.ClearValue.Color[1] = 0.1f;
            beg.Clear.ClearValue.Color[2] = 0.1f;
@@ -100,10 +76,8 @@ public:
            rtd.BeginningAccess = beg;
            rtd.EndingAccess = end;
            cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
-           D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
-           D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
-           cmdList_->RSSetViewports(1, &vp);
-           cmdList_->RSSetScissorRects(1, &sc);
+		   // ビューポート＆シザーはGame.cppのレンダー側で行うので、ここでは不要かも
+           
            // 色：赤
            colorCBMapped_->rgba[0] = 1.0f; colorCBMapped_->rgba[1] = 0.2f;
            colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
@@ -117,11 +91,11 @@ public:
                offscreenRT_->GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
        }
        // ===== Pass 2 : BackBuffer (緑の三角) =====
-       UINT backIdx = swapchain_->GetCurrentBackBufferIndex();
+       UINT backIdx = DR->GetSwapChain()->GetCurrentBackBufferIndex();
        ComPtr<ID3D12Resource> backBuffer;
-       ThrowIfFailed(swapchain_->GetBuffer(backIdx, IID_PPV_ARGS(&backBuffer)));
-       auto backRTV = CD3DX12_CPU_DESCRIPTOR_HANDLE(rtvHeapSwap_->GetCPUDescriptorHandleForHeapStart(),
-           backIdx, rtvStride_);
+       ThrowIfFailed(DR->GetSwapChain()->GetBuffer(backIdx, IID_PPV_ARGS(&backBuffer)));
+       auto rtvOffscreen = CD3DX12_CPU_DESCRIPTOR_HANDLE(
+		   m_rtvHeapOffDescriptors->GetCpuHandle(0));
        // PRESENT -> RENDER_TARGET
        {
            resourceUpload.Transition(
@@ -130,7 +104,7 @@ public:
        {
            D3D12_RENDER_PASS_BEGINNING_ACCESS beg = {};
            beg.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-           beg.Clear.ClearValue.Format = rtvFormat_;
+           beg.Clear.ClearValue.Format = DR->GetBackBufferFormat();
            beg.Clear.ClearValue.Color[0] = 0.05f;
            beg.Clear.ClearValue.Color[1] = 0.05f;
            beg.Clear.ClearValue.Color[2] = 0.12f;
@@ -138,14 +112,11 @@ public:
            D3D12_RENDER_PASS_ENDING_ACCESS end = {};
            end.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_STORE;
            D3D12_RENDER_PASS_RENDER_TARGET_DESC rtd = {};
-           rtd.cpuDescriptor = backRTV;
+           rtd.cpuDescriptor = DR->GetRenderTargetView();
            rtd.BeginningAccess = beg;
            rtd.EndingAccess = end;
            cmdList4_->BeginRenderPass(1, &rtd, nullptr, D3D12_RENDER_PASS_FLAG_NONE);
-           D3D12_VIEWPORT vp{ 0,0,(float)width_,(float)height_,0,1 };
-           D3D12_RECT     sc{ 0,0,(LONG)width_,(LONG)height_ };
-           cmdList_->RSSetViewports(1, &vp);
-           cmdList_->RSSetScissorRects(1, &sc);
+		   // ビューポート＆シザーはGame.cppのレンダー側で行うので、ここでは不要かも
            // 色：緑
            colorCBMapped_->rgba[0] = 0.2f; colorCBMapped_->rgba[1] = 1.0f;
            colorCBMapped_->rgba[2] = 0.2f; colorCBMapped_->rgba[3] = 1.0f;
@@ -162,7 +133,7 @@ public:
        }
 
        auto finish =  resourceUpload.End(DR->GetCommandQueue());
-       ThrowIfFailed(swapchain_->Present(1, 0));
+       ThrowIfFailed(DR->GetSwapChain()->Present(1, 0));
 	   finish.wait();
 
 
@@ -171,14 +142,7 @@ public:
 
 
 private:
-    // ---- リソース定義 ----
-    ID3D12Device* device_ = nullptr;
-    ID3D12CommandQueue* queue_ = nullptr;
-    IDXGISwapChain3* swapchain_ = nullptr;
-
-    DXGI_FORMAT rtvFormat_ = DXGI_FORMAT_R8G8B8A8_UNORM;
-    UINT width_ = 0, height_ = 0;
-    std::wstring shaderFile_;
+  
 
     // Frame
     ComPtr<ID3D12CommandAllocator>         cmdAlloc_;
@@ -198,7 +162,7 @@ private:
 
         std::unique_ptr<RenderTexture> m_renderTexture;
     std::unique_ptr<RenderTexture> m_offscreenRT;
-
+	std::wstring shaderFile_;
 
     std::unique_ptr<DirectX::DescriptorHeap> m_resourceDescriptors;
     std::unique_ptr<DirectX::DescriptorHeap> m_renderDescriptors;
@@ -254,6 +218,11 @@ private:
             Blur2RT,
             RTCount
         };
+        // テクスチャ
+        m_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
+            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            RTDescriptors::RTCount);
 
       
         device->CreateRenderTargetView(offscreenRT_->GetResource(),
@@ -267,26 +236,9 @@ private:
 
     }
 
-    void CreateOffscreenRT(DX::DeviceResources* DR) {
-		auto device = DR->GetD3DDevice();
-		auto commandList = DR->GetCommandList();
+    
 
-        // テクスチャ
-        m_rtvHeapOffDescriptors = std::make_unique<DescriptorHeap>(device,
-            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            RTDescriptors::RTCount);
-
-        // RTV
-        device->CreateRenderTargetView(m_offscreenRT->GetResource(),
-            nullptr,
-            m_rtvHeapOffDescriptors->GetCpuHandle(RTDescriptors::SceneRT));
-        auto rtvDescriptor = m_rtvHeapOffDescriptors->GetCpuHandle(RTDescriptors::SceneRT);
-        commandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, &dsvDescriptor);
-
-    }
-
-    void BuildRootSig() {
+    void BuildRootSig(DX::DeviceResources* DR) {
         //DirectXTK12Polygonから使う        
 
         D3D12_ROOT_PARAMETER rp{};
@@ -303,11 +255,11 @@ private:
 
         ComPtr<ID3DBlob> blob, err;
         ThrowIfFailed(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err));
-        ThrowIfFailed(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+        ThrowIfFailed(DR->GetD3DDevice()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
             IID_PPV_ARGS(&rootSig_)));
     }
 
-    void BuildShadersAndPSO() {
+    void BuildShadersAndPSO(DX::DeviceResources* DR) {
         UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #if defined(_DEBUG)
         flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -331,9 +283,9 @@ private:
         pso.SampleMask = UINT_MAX;
         pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         pso.NumRenderTargets = 1;
-        pso.RTVFormats[0] = rtvFormat_;
+        pso.RTVFormats[0] = DR->GetBackBufferFormat();
         pso.SampleDesc = { 1,0 };
-        ThrowIfFailed(device_->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&pso_)));
+        ThrowIfFailed(DR->GetD3DDevice()->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&pso_)));
     }
 
     void BuildGeometry() {
@@ -364,24 +316,5 @@ private:
 
     }
 
-    void BuildFrameObjects() {
-        ThrowIfFailed(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAlloc_)));
-        ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAlloc_.Get(), pso_.Get(), IID_PPV_ARGS(&cmdList_)));
-        ThrowIfFailed(cmdList_->Close()); // 初回は閉じておく
-        ThrowIfFailed(cmdList_->QueryInterface(IID_PPV_ARGS(&cmdList4_)));
-
-        ThrowIfFailed(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)));
-        fenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        fenceValue_ = 1;
-    }
-
-    void WaitGPU() {
-        ThrowIfFailed(queue_->Signal(fence_.Get(), fenceValue_));
-        if (fence_->GetCompletedValue() < fenceValue_) {
-            ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue_, fenceEvent_));
-            WaitForSingleObject(fenceEvent_, INFINITE);
-        }
-        fenceValue_++;
-    }
 };
 
