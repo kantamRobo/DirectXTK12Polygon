@@ -6,8 +6,7 @@
 
 #include "DeviceResources.h"
 #include "StepTimer.h"
-
-
+#include "tekito-.h"
 // A basic game implementation that creates a D3D12 device and
 // provides a game loop.
 class Game final : public DX::IDeviceNotify
@@ -44,7 +43,7 @@ public:
 
     // Properties
     void GetDefaultSize( int& width, int& height ) const noexcept;
-
+    RenderPassTwoTriangles renderer;
 private:
 
     void Update(DX::StepTimer const& timer);

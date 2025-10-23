@@ -6,14 +6,13 @@
 
 namespace DX
 {
-    // Provides an interface for an application that owns DeviceResources to be notified of the device being lost or created.
-    interface IDeviceNotify
+    // DirectXTK12 の Game クラスで利用されるデバイス通知インターフェース
+    class IDeviceNotify
     {
+    public:
         virtual void OnDeviceLost() = 0;
         virtual void OnDeviceRestored() = 0;
-
-    protected:
-        ~IDeviceNotify() = default;
+        virtual ~IDeviceNotify() = default;
     };
 
     // Controls all the DirectX device resources.
