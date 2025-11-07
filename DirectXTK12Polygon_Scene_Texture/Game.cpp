@@ -92,7 +92,7 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
-
+	m_scene->Render(m_deviceResources.get());
     PIXEndEvent(commandList);
 
     // Show the new frame.
@@ -204,6 +204,8 @@ void Game::CreateDeviceDependentResources()
     // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+	m_scene = std::make_unique<DirectXTK12_PolygonSceneTexture>(m_deviceResources.get());
+    
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.

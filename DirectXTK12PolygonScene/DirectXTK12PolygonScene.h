@@ -47,10 +47,6 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
 
 
-
-	//バッファ
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_ConstantBuffer;
-
 	
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;

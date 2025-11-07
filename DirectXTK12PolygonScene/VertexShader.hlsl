@@ -2,6 +2,7 @@ struct VS_INPUT
 {
     float4 pos : POSITION;   // 頂点位置
     float3 normal : NORMAL;  // 法線
+   
 };
 
 cbuffer ConstantBuffer
@@ -15,6 +16,7 @@ struct VS_OUTPUT
 {
     float4 pos : SV_POSITION; // 出力のスクリーン座標
     float3 normal : NORMAL;   // 出力の法線
+ 
 };
 
 VS_OUTPUT main(VS_INPUT input)
