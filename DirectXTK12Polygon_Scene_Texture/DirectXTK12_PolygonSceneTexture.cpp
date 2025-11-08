@@ -225,26 +225,33 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12_PolygonSceneTexture::Cre
 
    ranges[0].Init(
        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, // SRV
-       1,
+	   1,// number of descriptors
        0,                                // register(t0)
        0,                                // space 0
        D3D12_DESCRIPTOR_RANGE_FLAG_NONE
    );
    ranges[1].Init(
        D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-       1,
+	   1,// number of descriptors
        0,     //register s0                                        
        0,                                    // register space
        D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 
    CD3DX12_ROOT_PARAMETER rootParameters[3] = {};
    rootParameters[0].InitAsDescriptorTable(
-       1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL
+	   1,// number of descriptor ranges
+	   &ranges[0],// descriptor ranges
+	   D3D12_SHADER_VISIBILITY_PIXEL// Shader visibility
    );
    rootParameters[1].InitAsDescriptorTable(
-       1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL
+      
+	   1,// number of descriptor ranges
+	   &ranges[1],// descriptor ranges
+	   D3D12_SHADER_VISIBILITY_PIXEL// Shader visibility
    );
-   rootParameters[2].InitAsConstantBufferView(0);
+   rootParameters[2].InitAsConstantBufferView(
+	   0 // register b0
+   );
   
   
    auto rootSignatureFlags =
@@ -253,7 +260,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12_PolygonSceneTexture::Cre
        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 	   D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    // Root parameter descriptor
+    
    D3D12_ROOT_SIGNATURE_DESC rsigDesc = {};
 
 	rsigDesc.Flags = rootSignatureFlags;

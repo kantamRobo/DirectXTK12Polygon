@@ -5,7 +5,7 @@ struct VS_INPUT
     float2 texcoord : TEXCOORD0;
 };
 
-cbuffer ConstantBuffer
+cbuffer ConstantBuffer : register(b0)
 {
     float4x4 World; // ワールド変換行列
     float4x4 View; // ビュー変換行列
