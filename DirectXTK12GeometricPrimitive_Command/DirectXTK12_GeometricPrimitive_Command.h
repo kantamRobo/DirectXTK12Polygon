@@ -9,7 +9,13 @@ class DirectXTK12_GeometricPrimitive_Command
 #include <DescriptorHeap.h>
 #include <memory>
 #include <GraphicsMemory.h>
-class DirectXTK12Polygon
+struct SceneCB {
+	DirectX::XMFLOAT4X4 world;
+	DirectX::XMFLOAT4X4 view;
+	DirectX::XMFLOAT4X4 projection;
+	float padding[4];
+};
+class DirectXTK12_GeometricPrimitive_Command
 {
 public:
 	HRESULT CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width);
@@ -33,9 +39,7 @@ public:
 	DirectX::GraphicsResource m_VertexBuffer;
 	DirectX::GraphicsResource m_IndexBuffer;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_layout;
-	//std::vector<DirectX::VertexPosition> vertices;
-	//std::vector<unsigned short> indices;
-
+	
 	DirectX::XMMATRIX modelmat;
 	//シェーダーの作成
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;//新規追加

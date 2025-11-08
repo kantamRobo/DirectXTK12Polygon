@@ -2,10 +2,13 @@
 #include "DirectXTK12_GeometricPrimitive_Command.h"
 #include "pch.h"
 #include <ResourceUploadBatch.h>
-#include "DirectXTK12Polygon.h"
+#include <DirectXHelpers.h>
 #include <d3dcompiler.h>
 #include <d3dx12.h>
 #include <GeometricPrimitive.h>
+#include <RenderTargetState.h>
+#include <EffectPipelineStateDescription.h>
+#include <CommonStates.h>
 class DirectX::GeometricPrimitive;
 enum Descriptors
 {
@@ -19,7 +22,7 @@ DirectX::GeometricPrimitive::VertexCollection vertices;
 DirectX::GeometricPrimitive::IndexCollection indices;
 DirectX::SharedGraphicsResource vb;
 DirectX::SharedGraphicsResource ib;
-HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
+HRESULT DirectXTK12_GeometricPrimitive_Command::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory, DX::DeviceResources* deviceResources, int height, int width)
 {
     // Create shape data
 
@@ -34,51 +37,25 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     size_t isize = indices.size() * sizeof(uint16_t);
     ib = DirectX::GraphicsMemory::Get().Allocate(isize);
     memcpy(ib.Memory(), indices.data(), isize);
-    /*
-    // 三角形の頂点データ
-
-    vertices.resize(3);
-
-    vertices[0].position.x = 0.0f;
-    vertices[0].position.y = 0.5f;
-    vertices[0].position.z = 0.0f;
-
-    vertices[1].position.x = 0.5f;
-    vertices[1].position.y = -0.5f;
-    vertices[1].position.z = 0.0f;
-
-    vertices[2].position.x = -0.5f;
-    vertices[2].position.y = -0.5f;
-    vertices[2].position.z = 0.0f;
-    indices.resize(3);
-
-    indices[0] = 0;
-    indices[1] = 1;
-    indices[2] = 2;
-    */
+    
     DirectX::ResourceUploadBatch resourceUpload(deviceResources->GetD3DDevice());
 
     resourceUpload.Begin();
 
-    /*
-    m_VertexBuffer = graphicsmemory->Allocate(sizeof(DirectX::VertexPosition) * vertices.size());
-    memcpy(m_VertexBuffer.Memory(), vertices.data(), sizeof(DirectX::VertexPosition) * vertices.size());
-    m_IndexBuffer = graphicsmemory->Allocate(sizeof(unsigned short) * indices.size());
-    //(DirectXTK12Assimpで追加)
-    */
-    //m_vertexBufferView.BufferLocation = m_VertexBuffer.GpuAddress();
+ 
+   
     m_vertexBufferView.BufferLocation = vb.GpuAddress();
-    //m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPosition);
+    
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionColor);
-    // m_vertexBufferView.SizeInBytes = static_cast<UINT>(m_VertexBuffer.Size());
+    
     m_vertexBufferView.SizeInBytes = static_cast<UINT>(vb.Size());
 
-    //m_indexBufferView.BufferLocation = m_IndexBuffer.GpuAddress();
+   
     m_indexBufferView.BufferLocation = ib.GpuAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    // m_indexBufferView.SizeInBytes = m_IndexBuffer.Size();
+   
     m_indexBufferView.SizeInBytes = ib.Size();
-    //memcpy(m_IndexBuffer.Memory(), indices.data(), sizeof(unsigned short) * indices.size());
+  
     memcpy(ib.Memory(), indices.data(), sizeof(uint16_t) * indices.size());
 
 
@@ -86,6 +63,25 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
     //定数バッファの作成(DIrectXTK12Assimpで追加)
 
     //https://github.com/microsoft/DirectXTK12/wiki/GraphicsMemory
+
+    DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
+
+    DirectX::XMVECTOR eye = DirectX::XMVectorSet(0.0f, 0.0f, -2.0f, 0.0f);  // 距離は好みで -1.5f～-5.0f くらい
+    DirectX::XMVECTOR focus = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eye, focus, up);
+
+    constexpr float fov = DirectX::XMConvertToRadians(45.0f);
+    float aspect = float(sz.right - sz.left) / float(sz.bottom - sz.top);
+    float    nearZ = 0.1f;
+    float    farZ = 100.0f;
+    DirectX::XMMATRIX projMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
+
+    SceneCB cb;
+    XMStoreFloat4x4(&cb.world, XMMatrixTranspose(worldMatrix));
+    XMStoreFloat4x4(&cb.view, XMMatrixTranspose(viewMatrix));
+    XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(projMatrix));
 
     m_pipelineState = CreateGraphicsPipelineState(deviceResources, L"VertexShader.hlsl", L"PixelShader.hlsl");
 
@@ -96,7 +92,7 @@ HRESULT DirectXTK12Polygon::CreateBuffer(DirectX::GraphicsMemory* graphicsmemory
 
 
 //(DIrectXTK12Assimpで追加)
-void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
+void DirectXTK12_GeometricPrimitive_Command::Draw(const DX::DeviceResources* DR) {
 
 
     DirectX::ResourceUploadBatch resourceUpload(DR->GetD3DDevice());
@@ -150,7 +146,7 @@ void DirectXTK12Polygon::Draw(const DX::DeviceResources* DR) {
 using Microsoft::WRL::ComPtr;
 //(DIrectXTK12Assimpで追加)
 // グラフィックパイプラインステートを作成する関数
-Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPipelineState(
+Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12_GeometricPrimitive_Command::CreateGraphicsPipelineState(
     DX::DeviceResources* deviceresources,
 
     const std::wstring& vertexShaderPath,
