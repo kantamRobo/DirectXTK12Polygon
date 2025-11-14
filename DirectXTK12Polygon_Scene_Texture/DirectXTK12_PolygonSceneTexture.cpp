@@ -18,10 +18,6 @@ enum RootParameterIndex
 	TextureSampler = 2,
 	RootParameterCount = 3
 };
-
-const UINT TEXTURE_SRVROOTPARAM = 1;
-const UINT TEXTURE_SAMPLERROOTPARAM = 2;
-const UINT CONSTANTBUFFFER_ROOTPARAM = 0;
 void DirectXTK12_PolygonSceneTexture::CreateTexture(DX::DeviceResources* DR)
 {
     auto device = DR->GetD3DDevice();
