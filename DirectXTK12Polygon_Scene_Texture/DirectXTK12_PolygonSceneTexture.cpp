@@ -27,7 +27,7 @@ void DirectXTK12_PolygonSceneTexture::CreateTexture(DX::DeviceResources* DR)
     resourceUpload.Begin();
 
     DX::ThrowIfFailed(
-        CreateWICTextureFromFile(device, resourceUpload, L"E:\\D3D12MAスライド\\PlacedResourceorigin.png", tex.ReleaseAndGetAddressOf(), true
+        CreateWICTextureFromFile(device, resourceUpload, ここに自由に画像パスを入力, tex.ReleaseAndGetAddressOf(), true
         ));
 
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
