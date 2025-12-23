@@ -1,3 +1,6 @@
+//DirctXTK12を使った三角形描画のコード例
+
+
 #include "pch.h"
 #include <ResourceUploadBatch.h>
 #include "DirectXTK12Polygon.h"
