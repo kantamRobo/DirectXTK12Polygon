@@ -1,4 +1,10 @@
-﻿#include "pch.h"
+﻿
+
+//メッシュシェーダーをDirectXTK12で使うためのコード
+//DirectXTK12の一部機能を利用してメッシュシェーダーを実装しています。
+//三角形ポリゴンを座標変換して、そのうえでメッシュシェーダーを使って描画します。
+
+#include "pch.h"
 #include "DirectXTK12PolygonMeshshader.h"
 #include <d3dx12.h>
 #include "ReadData.h"

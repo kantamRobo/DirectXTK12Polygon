@@ -47,7 +47,8 @@
     </Manifest>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="tekito.hlsl" />
+    <FxCompile Include="PS.hlsl" />
+    <FxCompile Include="VS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
