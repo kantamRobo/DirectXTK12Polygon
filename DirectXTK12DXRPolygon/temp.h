@@ -23,6 +23,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> blasResultBuffer;
 	//スクラッチバッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> scratchBuffer;
+   //インスタンスのアップロードバッファ
+	Microsoft::WRL::ComPtr<ID3D12Resource> instanceUploadBuffer;
     //レイトレステートオブジェクト
 	Microsoft::WRL::ComPtr<ID3D12StateObject> m_rtStateObject;
     //tlasディスクリプタハンドル
