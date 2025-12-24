@@ -3,20 +3,31 @@
 #include <wrl.h>
 #include <d3dx12.h>
 using Microsoft::WRL::ComPtr;
+
 struct Vertex
 {
-    float position[3];
-};
 
+	DirectX::XMFLOAT3 position;
+	DirectX::XMFLOAT4 color;
+
+};
+// 頂点データ (例: 三角形)
+std::vector<Vertex> triangleVertices = {
+    { { 0.0f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+    { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+    { {-0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+};
 class HelloDXR
 {
 
-
+public:
     //グローバルルートシグネチャ
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_globalRootSig;
 	// レイトレーシングパイプラインステートオブジェクト
 	Microsoft::WRL::ComPtr<ID3D12StateObject> m_rtPipelineState;
 public:
+    //頂点バッファ
+	Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
     //TLASのリザルトバッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> tlasResultBuffer;
 	//BLASのリザルトバッファ
@@ -42,14 +53,68 @@ public:
     //スクリーンの幅と高さ
     UINT ScreenWidth = 0;
 	UINT ScreenHeight = 0;
-
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
 public:
     // UINT版
     UINT Align(UINT size, UINT alignment)
     {
         return (size + (alignment - 1)) & ~(alignment - 1);
     }
+    void Initialize()
+    {
+		// 初期化コード (必要に応じて追加)
+		CreateVertexBuffer(nullptr);
+		BuildAccelerationStructures(nullptr, nullptr, vertexBuffer.Get(), static_cast<UINT>(triangleVertices.size()));
+		CreateRaytracingPipeline(nullptr);
+		BuildShaderTables(nullptr);
 
+    }
+    void CreateVertexBuffer(ID3D12Device5* device)
+    {
+
+
+        const UINT vertexBufferSize = static_cast<UINT>(sizeof(Vertex) * triangleVertices.size());
+        // 2. リソースの作成 (Upload Heap)
+// CPUから書き込み可能で、GPUからも読み取り可能なヒープタイプを指定
+        auto heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        auto resDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+
+        HRESULT hr = device->CreateCommittedResource(
+            &heapProp,
+            D3D12_HEAP_FLAG_NONE,
+            &resDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, // Upload Heapの初期状態はこれにする必要があります
+            nullptr,
+            IID_PPV_ARGS(&vertexBuffer)
+        );
+
+        if (FAILED(hr)) {
+            // エラーハンドリング
+        }
+
+        // 3. データの転送 (Map -> Copy -> Unmap)
+        UINT8* pVertexDataBegin = nullptr;
+        CD3DX12_RANGE readRange(0, 0); // CPUから読み込むつもりはないので範囲を0に指定
+
+        // GPUメモリをCPUのアドレス空間にマッピング
+        hr = vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin));
+
+        if (SUCCEEDED(hr)) {
+            // メモリコピー
+            memcpy(pVertexDataBegin, triangleVertices.data(), vertexBufferSize);
+
+            // マッピング解除
+            vertexBuffer->Unmap(0, nullptr);
+        }
+
+        // 4. 頂点バッファビュー (VBV) の作成
+        // ディスクリプタヒープは不要で、構造体を保持しておくだけでOK
+       
+        vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress(); // GPU上のアドレス
+        vertexBufferView.StrideInBytes = sizeof(Vertex);                        // 1頂点あたりのサイズ
+        vertexBufferView.SizeInBytes = vertexBufferSize;
+    }
+   
 	//幅と高さをセット
     void SetScreenSize(const UINT& width, const UINT& height)
     {
@@ -261,6 +326,7 @@ public:
         dispatchDesc.Depth = 1;
 
         commandList->SetPipelineState1(m_rtStateObject.Get());
+        commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
         commandList->DispatchRays(&dispatchDesc);
     }
     

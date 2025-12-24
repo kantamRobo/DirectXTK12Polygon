@@ -4,13 +4,13 @@
 
 #include "pch.h"
 #include "Game.h"
-
+#include "temp.h"
 extern void ExitGame() noexcept;
 
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
-
+HelloDXR g_HelloDXR;
 Game::Game() noexcept(false)
 {
     m_deviceResources = std::make_unique<DX::DeviceResources>();
@@ -204,6 +204,11 @@ void Game::CreateDeviceDependentResources()
     // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // TODO: Initialize device dependent objects here (independent of window size).
+    g_HelloDXR.SetScreenSize(
+        m_deviceResources->GetOutputSize().right,
+        m_deviceResources->GetOutputSize().bottom
+	);
+    
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
