@@ -2,6 +2,11 @@
 #include <d3d12.h>
 #include <wrl.h>
 #include <d3dx12.h>
+#include <DeviceResources.h>
+#include <DirectXMath.h>
+#include <dxcapi.h> // DXCを使うために必須
+#include <d3dcompiler.h>
+#include <d3dx12.h>
 using Microsoft::WRL::ComPtr;
 
 struct Vertex
@@ -50,6 +55,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> missShaderTableBuffer;
 	//ヒットグループシェーダーテーブルバッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> hitGroupShaderTableBuffer;
+    
+    Microsoft::WRL::ComPtr<ID3DBlob> dxilLib;
     //スクリーンの幅と高さ
     UINT ScreenWidth = 0;
 	UINT ScreenHeight = 0;
@@ -60,15 +67,124 @@ public:
     {
         return (size + (alignment - 1)) & ~(alignment - 1);
     }
-    void Initialize()
+ 
+    // D3DBlob生成用ヘルパー関数
+// hlslFileName: シェーダーファイルパス (例: L"Shaders.hlsl")
+    Microsoft::WRL::ComPtr<ID3DBlob> CompileShaderLibrary(const std::wstring& hlslFileName)
+    {
+        // 1. DXCのユーティリティとコンパイラのインスタンス作成
+        Microsoft::WRL::ComPtr<IDxcUtils> pUtils;
+        Microsoft::WRL::ComPtr<IDxcCompiler3> pCompiler;
+
+        HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&pUtils));
+        if (FAILED(hr)) return nullptr;
+
+        hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler));
+        if (FAILED(hr)) return nullptr;
+
+        // 2. インクルードハンドラの作成 (ヘッダーファイルをincludeする場合に必要)
+        Microsoft::WRL::ComPtr<IDxcIncludeHandler> pIncludeHandler;
+        pUtils->CreateDefaultIncludeHandler(&pIncludeHandler);
+
+        // 3. ソースファイルの読み込み
+        ComPtr<IDxcBlobEncoding> pSourceBlob;
+        hr = pUtils->LoadFile(hlslFileName.c_str(), nullptr, &pSourceBlob);
+        if (FAILED(hr)) {
+            OutputDebugStringA("Failed to load shader file.\n");
+            return nullptr;
+        }
+
+        // コンパイル用バッファ設定
+        DxcBuffer sourceBuffer;
+        sourceBuffer.Ptr = pSourceBlob->GetBufferPointer();
+        sourceBuffer.Size = pSourceBlob->GetBufferSize();
+        sourceBuffer.Encoding = DXC_CP_ACP; // デフォルト (ANSI/UTF-8)
+
+        // 4. コンパイル引数の設定
+        std::vector<LPCWSTR> args;
+
+        // ターゲットプロファイル: レイトレーシングは "lib_6_3" 以上が必須
+        args.push_back(L"-T");
+        args.push_back(L"lib_6_3");
+
+        // デバッグ情報 (必要に応じて変更)
+#if defined(_DEBUG)
+        args.push_back(L"-Zi");          // デバッグ情報有効化
+        args.push_back(L"-Qembed_debug"); // デバッグ情報を埋め込む
+        args.push_back(L"-Od");          // 最適化なし
+#else
+        args.push_back(L"-O3");          // 最大最適化
+#endif
+
+        // 5. コンパイル実行
+        Microsoft::WRL::ComPtr<IDxcResult> pResult;
+        hr = pCompiler->Compile(
+            &sourceBuffer,          // ソース
+            args.data(),            // 引数配列
+            (UINT32)args.size(),    // 引数の数
+            pIncludeHandler.Get(),  // インクルードハンドラ
+            IID_PPV_ARGS(&pResult)  // 結果出力先
+        );
+
+        if (FAILED(hr)) return nullptr;
+
+        // 6. エラー確認
+        Microsoft::WRL::ComPtr<IDxcBlobUtf8> pErrors = nullptr;
+        pResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&pErrors), nullptr);
+        if (pErrors != nullptr && pErrors->GetStringLength() > 0)
+        {
+            // エラーメッセージをデバッグ出力に出す
+            OutputDebugStringA((char*)pErrors->GetBufferPointer());
+            OutputDebugStringA("\n");
+
+            // エラーがあった場合は失敗とする
+            // (警告だけの場合は成功させても良いが、ここでは厳密にする)
+            // DXCは成功しても空のエラーBlobを返すことがあるため長さをチェック
+        }
+
+        // コンパイル自体のステータス確認
+        HRESULT compileStatus;
+        pResult->GetStatus(&compileStatus);
+        if (FAILED(compileStatus)) {
+            OutputDebugStringA("Shader Compilation Failed.\n");
+            return nullptr;
+        }
+
+        // 7. コンパイル済みバイナリ (DXIL) の取得
+        Microsoft::WRL::ComPtr<IDxcBlob> pShaderBlob;
+        hr = pResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&pShaderBlob), nullptr);
+        if (FAILED(hr)) return nullptr;
+
+        // 8. IDxcBlob -> ID3DBlob への変換
+        // IDxcBlobは直接ID3DBlobと互換性がないため、D3DCreateBlobで作成してコピーするか、
+        // IDxcBlob自体を保持して GetBufferPointer() を使うのが一般的です。
+        // ここでは、リクエストされた関数の引数型 (ID3DBlob*) に合わせるため、ID3DBlobを生成してコピーします。
+
+        // 注: D3DCreateBlobを使うには d3dcompiler.lib のリンクと #include <d3dcompiler.h> が必要
+        // もし d3dcompiler を使いたくない場合は、自作クラスでラップするか、
+        // 呼び出し元の引数を IDxcBlob* に変えるのがモダンな設計です。
+
+        Microsoft::WRL::ComPtr<ID3DBlob> pD3DBlob;
+        // D3DCreateBlob関数を使用 (要: #include <d3dcompiler.h>)
+        if (FAILED(D3DCreateBlob(pShaderBlob->GetBufferSize(), &pD3DBlob))) {
+            return nullptr;
+        }
+
+        memcpy(pD3DBlob->GetBufferPointer(), pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize());
+
+        return pD3DBlob;
+    }
+    void Initialize(DX::DeviceResources* deviceResources)
     {
 		// 初期化コード (必要に応じて追加)
-		CreateVertexBuffer(nullptr);
-		BuildAccelerationStructures(nullptr, nullptr, vertexBuffer.Get(), static_cast<UINT>(triangleVertices.size()));
-		CreateRaytracingPipeline(nullptr);
-		BuildShaderTables(nullptr);
+		dxilLib = CompileShaderLibrary(L"RaytracingShaders.hlsl");
+        CreateVertexBuffer(deviceResources->GetD3DDevice());
+		BuildAccelerationStructures(deviceResources->GetD3DDevice(), deviceResources->GetCommandList(), vertexBuffer.Get(), static_cast<UINT>(triangleVertices.size()));
+		CreateRaytracingPipeline(deviceResources->GetD3DDevice());
+		BuildShaderTables(deviceResources->GetD3DDevice());
 
     }
+ 
     void CreateVertexBuffer(ID3D12Device5* device)
     {
 
@@ -207,13 +323,13 @@ public:
         commandList->BuildRaytracingAccelerationStructure(&tlasBuildDesc, 0, nullptr);
     }
 
-    void CreateRaytracingPipeline(ID3D12Device5* device, ID3DBlob* dxilLib)
+    void CreateRaytracingPipeline(ID3D12Device5* device)
     {
         CD3DX12_STATE_OBJECT_DESC raytracingPipeline{ D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE };
 
         // 1. DXILライブラリ (コンパイル済みシェーダー)
         auto lib = raytracingPipeline.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-        D3D12_SHADER_BYTECODE libdxil = CD3DX12_SHADER_BYTECODE(dxilLib);
+        D3D12_SHADER_BYTECODE libdxil = { dxilLib->GetBufferPointer(), dxilLib->GetBufferSize() };
         lib->SetDXILLibrary(&libdxil);
         // エクスポートするシンボル (シェーダー関数名)
         lib->DefineExport(L"RayGen");
@@ -245,10 +361,10 @@ public:
     }
 
     // 概念図: | RayGenRecord | MissRecord | HitGroupRecord |
-    void BuildShaderTables(ID3D12Device5* device, ID3D12StateObject* rtpso)
+    void BuildShaderTables(ID3D12Device5* device)
     {
         ID3D12StateObjectProperties* props;
-        rtpso->QueryInterface(IID_PPV_ARGS(&props));
+        m_rtStateObject->QueryInterface(IID_PPV_ARGS(&props));
 
         void* rayGenID = props->GetShaderIdentifier(L"RayGen");
         void* missID = props->GetShaderIdentifier(L"Miss");
