@@ -277,26 +277,27 @@ public:
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO blasInfo, tlasInfo;
         device->GetRaytracingAccelerationStructurePrebuildInfo(&blasInputs, &blasInfo);
         device->GetRaytracingAccelerationStructurePrebuildInfo(&tlasInputs, &tlasInfo);
-
+        auto defaultheap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         // ...ここでスクラッチバッファとAS用バッファ(Result)をCreateCommittedResourceで作成してください...
+        auto buffer = CD3DX12_RESOURCE_DESC::Buffer(blasInfo.ScratchDataSizeInBytes > tlasInfo.ScratchDataSizeInBytes ? blasInfo.ScratchDataSizeInBytes : tlasInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+           &defaultheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(blasInfo.ScratchDataSizeInBytes > tlasInfo.ScratchDataSizeInBytes ? blasInfo.ScratchDataSizeInBytes : tlasInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+           &buffer,
             D3D12_RESOURCE_STATE_COMMON,
             nullptr,
 			IID_PPV_ARGS(&scratchBuffer));
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            &defaultheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(blasInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+            &buffer,
             D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
 			nullptr,
 			IID_PPV_ARGS(&blasResultBuffer));
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            &defaultheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(tlasInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+            &buffer,
 			D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,nullptr, IID_PPV_ARGS(&tlasResultBuffer));
         
 
@@ -384,25 +385,26 @@ public:
         // HitGroup Table
         pData += Align(shaderIdSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
         memcpy(pData, hitGroupID, shaderIdSize);
-
+		auto uploadheap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		auto Buffer = CD3DX12_RESOURCE_DESC::Buffer(Align(shaderIdSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT));
 		// 各テーブルバッファの作成
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &uploadheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(Align(shaderIdSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT)),
+            &Buffer,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
 			IID_PPV_ARGS(&rayGenShaderTableBuffer));
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &uploadheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(Align(shaderIdSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT)),
+            &Buffer,
             D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,IID_PPV_ARGS(&missShaderTableBuffer));
         device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &uploadheap,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(Align(shaderIdSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT)),
+            &Buffer,
 			D3D12_RESOURCE_STATE_GENERIC_READ,nullptr, IID_PPV_ARGS(&hitGroupShaderTableBuffer));
       
     }
