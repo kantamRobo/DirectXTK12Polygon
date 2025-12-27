@@ -16,6 +16,13 @@ struct Vertex
 	DirectX::XMFLOAT4 color;
 
 };
+/*
+DXRにおいて、AS（Acceleration Structure）のバッファアドレスは 256バイトアライメント (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT) に沿っている必要があります。
+*/
+// 必須のアライメント
+#define D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT 256
+
+
 // 頂点データ (例: 三角形)
 std::vector<Vertex> triangleVertices = {
     { { 0.0f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
@@ -177,9 +184,9 @@ public:
     void Initialize(DX::DeviceResources* deviceResources)
     {
 		// 初期化コード (必要に応じて追加)
-		dxilLib = CompileShaderLibrary(L"RaytracingShaders.hlsl");
+		dxilLib = CompileShaderLibrary(L"MyRaytracing.hlsl");
         CreateVertexBuffer(deviceResources->GetD3DDevice());
-		BuildAccelerationStructures(deviceResources->GetD3DDevice(), deviceResources->GetCommandList(), vertexBuffer.Get(), static_cast<UINT>(triangleVertices.size()));
+		BuildAccelerationStructures(deviceResources, static_cast<UINT>(triangleVertices.size()));
 		CreateRaytracingPipeline(deviceResources->GetD3DDevice());
 		BuildShaderTables(deviceResources->GetD3DDevice());
 
@@ -239,12 +246,20 @@ public:
     }
     // 必要なヘッダー: d3dx12.h
     void BuildAccelerationStructures(
-        ID3D12Device5* device,
-        ID3D12GraphicsCommandList4* commandList,
-        ID3D12Resource* vertexBuffer,
+       
+        DX::DeviceResources* deviceResources,
         UINT vertexCount)
     {
-        // --- 1. BLAS (Geometry) の定義 ---
+        auto commandList = deviceResources->GetCommandList();
+        auto device = deviceResources->GetD3DDevice();
+        auto commandAllocator = deviceResources->GetCommandAllocator();
+
+        // コマンドリストのリセット (必要に応じて)
+        commandList->Reset(commandAllocator, nullptr);
+
+        // ==========================================
+        // 1. BLAS (Geometry) の設定
+        // ==========================================
         D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
         geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
         geomDesc.Triangles.VertexBuffer.StartAddress = vertexBuffer->GetGPUVirtualAddress();
@@ -260,68 +275,104 @@ public:
         blasInputs.NumDescs = 1;
         blasInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
-        // --- 2. TLAS (Instance) の定義 ---
-        D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-        instanceDesc.Transform[0][0] = instanceDesc.Transform[1][1] = instanceDesc.Transform[2][2] = 1; // Identity
-        instanceDesc.InstanceMask = 1;
-        instanceDesc.AccelerationStructure = blasResultBuffer->GetGPUVirtualAddress();
-        // ※ 実際にはBLAS構築後にGPUアドレスを取得して設定します
-
+        // ==========================================
+        // 2. TLAS (Instance) の設定 (初期段階)
+        // ==========================================
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInputs = {};
         tlasInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         tlasInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
         tlasInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
         tlasInputs.NumDescs = 1; // インスタンス数
+        // ※ InstanceDescs (アドレス) はバッファ作成後にセットします
 
-        // --- 3. サイズ要件の取得とバッファ確保 (省略形) ---
+        // ==========================================
+        // 3. サイズ計算と AS用バッファ確保
+        // ==========================================
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO blasInfo, tlasInfo;
         device->GetRaytracingAccelerationStructurePrebuildInfo(&blasInputs, &blasInfo);
         device->GetRaytracingAccelerationStructurePrebuildInfo(&tlasInputs, &tlasInfo);
-        auto defaultheap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-        // ...ここでスクラッチバッファとAS用バッファ(Result)をCreateCommittedResourceで作成してください...
-        auto buffer = CD3DX12_RESOURCE_DESC::Buffer(blasInfo.ScratchDataSizeInBytes > tlasInfo.ScratchDataSizeInBytes ? blasInfo.ScratchDataSizeInBytes : tlasInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+        // ヒーププロパティ
+        auto defaultHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        auto uploadHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD); // インスタンス記述子転送用
+
+        // バッファ記述子の作成
+        auto scratchBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(
+            std::max(blasInfo.ScratchDataSizeInBytes, tlasInfo.ScratchDataSizeInBytes),
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+        );
+        // ★ここ修正済み: ResultDataMaxSizeInBytesを使用
+        auto blasBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(blasInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        auto tlasBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(tlasInfo.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+        // リソース生成 (BLAS/TLAS/Scratch)
+        device->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &scratchBufferDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&scratchBuffer));
+        device->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &blasBufferDesc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, IID_PPV_ARGS(&blasResultBuffer));
+        device->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &tlasBufferDesc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, IID_PPV_ARGS(&tlasResultBuffer));
+
+        // ==========================================
+        // 4. インスタンスバッファの作成とデータ転送 (★ここが重要★)
+        // ==========================================
+
+        // インスタンス記述子を格納するUploadバッファを作成
+        const UINT64 instanceBufferSize = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * tlasInputs.NumDescs;
+        auto instanceBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(instanceBufferSize);
+
+        ComPtr<ID3D12Resource> instanceBuffer;
         device->CreateCommittedResource(
-           &defaultheap,
+            &uploadHeapProps,
             D3D12_HEAP_FLAG_NONE,
-           &buffer,
-            D3D12_RESOURCE_STATE_COMMON,
+            &instanceBufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-			IID_PPV_ARGS(&scratchBuffer));
-        device->CreateCommittedResource(
-            &defaultheap,
-            D3D12_HEAP_FLAG_NONE,
-            &buffer,
-            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-			nullptr,
-			IID_PPV_ARGS(&blasResultBuffer));
-        device->CreateCommittedResource(
-            &defaultheap,
-            D3D12_HEAP_FLAG_NONE,
-            &buffer,
-			D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,nullptr, IID_PPV_ARGS(&tlasResultBuffer));
-        
+            IID_PPV_ARGS(&instanceBuffer)
+        );
 
-        // --- 4. ASのビルドコマンド発行 ---
+        // インスタンス記述子の定義 (CPU側)
+        D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
+        instanceDesc.Transform[0][0] = instanceDesc.Transform[1][1] = instanceDesc.Transform[2][2] = 1.0f;
+        instanceDesc.InstanceMask = 0xFF; // 全て表示
+        instanceDesc.InstanceContributionToHitGroupIndex = 0;
+        instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+        // ★ここで確保したBLASのアドレスをセット
+        instanceDesc.AccelerationStructure = blasResultBuffer->GetGPUVirtualAddress();
 
-        // BLASビルド
+        // バッファにマップして書き込み
+        D3D12_RAYTRACING_INSTANCE_DESC* pData;
+        instanceBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pData));
+        pData[0] = instanceDesc; // 配列コピー
+        instanceBuffer->Unmap(0, nullptr);
+
+        // ★TLASの入力にインスタンスバッファのアドレスを設定
+        tlasInputs.InstanceDescs = instanceBuffer->GetGPUVirtualAddress();
+
+        // ==========================================
+        // 5. BLAS ビルド
+        // ==========================================
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC blasBuildDesc = {};
         blasBuildDesc.Inputs = blasInputs;
         blasBuildDesc.DestAccelerationStructureData = blasResultBuffer->GetGPUVirtualAddress();
         blasBuildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+
         commandList->BuildRaytracingAccelerationStructure(&blasBuildDesc, 0, nullptr);
 
-        // バリア (BLAS完了待ち)
+        // BLASビルド完了待ちバリア
         auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(blasResultBuffer.Get());
         commandList->ResourceBarrier(1, &uavBarrier);
 
-        // TLASビルド (BLASのアドレスをInstanceDescに設定してUploadBuffer経由でGPUに送った後に行う)
-        // ...InstanceDescの転送処理...
-
+        // ==========================================
+        // 6. TLAS ビルド
+        // ==========================================
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC tlasBuildDesc = {};
-        tlasBuildDesc.Inputs = tlasInputs; // InstanceDescsのアドレスをセットしたinputs
+        tlasBuildDesc.Inputs = tlasInputs; // InstanceDescsが設定済みのものを使用
         tlasBuildDesc.DestAccelerationStructureData = tlasResultBuffer->GetGPUVirtualAddress();
         tlasBuildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+
         commandList->BuildRaytracingAccelerationStructure(&tlasBuildDesc, 0, nullptr);
+
+        // コマンドリストを閉じて実行 (呼び出し元で行う場合は省略)
+        // commandList->Close();
+
     }
 
     void CreateRaytracingPipeline(ID3D12Device5* device)
@@ -332,7 +383,7 @@ public:
         auto lib = raytracingPipeline.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
         D3D12_SHADER_BYTECODE libdxil = { dxilLib->GetBufferPointer(), dxilLib->GetBufferSize() };
         lib->SetDXILLibrary(&libdxil);
-        // エクスポートするシンボル (シェーダー関数名)
+        // エクスポートするシンボル (シェーダー関数名)f
         lib->DefineExport(L"RayGen");
         lib->DefineExport(L"Miss");
         lib->DefineExport(L"ClosestHit");

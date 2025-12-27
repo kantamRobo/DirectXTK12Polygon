@@ -92,7 +92,7 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
-
+	g_HelloDXR.Render(m_deviceResources->GetCommandList());
     PIXEndEvent(commandList);
 
     // Show the new frame.
@@ -208,7 +208,7 @@ void Game::CreateDeviceDependentResources()
         m_deviceResources->GetOutputSize().right,
         m_deviceResources->GetOutputSize().bottom
 	);
-    
+	g_HelloDXR.Initialize(m_deviceResources.get());
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
