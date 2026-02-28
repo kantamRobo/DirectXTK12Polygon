@@ -22,7 +22,7 @@ void DirectXTK12_PolygonSceneTexture::CreateTexture(DX::DeviceResources* DR)
 {
     auto device = DR->GetD3DDevice();
 
-   DirectX:: ResourceUploadBatch resourceUpload(device);
+   DirectX::ResourceUploadBatch resourceUpload(device);
 
     resourceUpload.Begin();
 

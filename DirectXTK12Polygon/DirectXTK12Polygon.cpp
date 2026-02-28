@@ -175,11 +175,17 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
     }
 
     // 入力レイアウトを定義
+  /*
     m_layout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     
            };
+           */
 
+    m_layout = {
+      { "POSITION", 0, DXGI_FORMAT_R32G32B32_UINT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+
+    };
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
@@ -191,8 +197,8 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12Polygon::CreateGraphicsPi
     CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
 
     // use all parameters
-    rsigDesc.Init(0,nullptr, 0, nullptr, rootSignatureFlags);
-
+    //rsigDesc.Init(0,nullptr, 0, nullptr, rootSignatureFlags);
+    rsigDesc.Init(0, nullptr, 0, nullptr, rootSignatureFlags);
     DX::ThrowIfFailed(DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf()));
  
     //https://github.com/microsoft/DirectXTK12/wiki/PSOs,-Shaders,-and-Signatures

@@ -1,16 +1,12 @@
 //
 // Game.cpp
 //
-
 #include "pch.h"
 #include "Game.h"
 #include "temp.h"
-extern void ExitGame() noexcept;
 
-using namespace DirectX;
-
-using Microsoft::WRL::ComPtr;
 HelloDXR g_HelloDXR;
+
 Game::Game() noexcept(false)
 {
     m_deviceResources = std::make_unique<DX::DeviceResources>();
@@ -92,7 +88,7 @@ void Game::Render()
     PIXBeginEvent(commandList, PIX_COLOR_DEFAULT, L"Render");
 
     // TODO: Add your rendering code here.
-	g_HelloDXR.Render(m_deviceResources->GetCommandList());
+    g_HelloDXR.Render(commandList, m_deviceResources->GetD3DDevice(), m_deviceResources->GetRenderTarget());
     PIXEndEvent(commandList);
 
     // Show the new frame.
@@ -116,7 +112,7 @@ void Game::Clear()
     const auto dsvDescriptor = m_deviceResources->GetDepthStencilView();
 
     commandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, &dsvDescriptor);
-    commandList->ClearRenderTargetView(rtvDescriptor, Colors::CornflowerBlue, 0, nullptr);
+    commandList->ClearRenderTargetView(rtvDescriptor, DirectX::Colors::CornflowerBlue, 0, nullptr);
     commandList->ClearDepthStencilView(dsvDescriptor, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     // Set the viewport and scissor rect.

@@ -72,9 +72,13 @@ HRESULT DirectXTK12PolygonScene::CreateBuffer(DirectX::GraphicsMemory* graphicsm
 
     //(DirectXTK12Assimpで追加)
    // DirectXTK12Spehere.cpp
+   
     m_vertexBufferView.BufferLocation = m_vertexBuffer.GpuAddress();
     m_vertexBufferView.StrideInBytes = sizeof(DirectX::VertexPositionNormal);
     m_vertexBufferView.SizeInBytes = UINT(sizeof(DirectX::VertexPositionNormal) * vertices.size()); // ←必ずVertexPositionNormalで揃える
+    
+
+  
 
 	m_indexBufferView.BufferLocation = m_indexBuffer.GpuAddress();
     m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
@@ -223,10 +227,15 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonScene::CreateGraph
     }
 
     // 入力レイアウトを定義
+    
     m_layout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
          { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
+    
+
+   
+
 
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -242,7 +251,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DirectXTK12PolygonScene::CreateGraph
     CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
 
     // use all parameters
-    rsigDesc.Init(static_cast<UINT>(std::size(rootParameters)), rootParameters, 0, nullptr, rootSignatureFlags);
+   // rsigDesc.Init(static_cast<UINT>(std::size(rootParameters)), rootParameters, 0, nullptr, rootSignatureFlags);
+    rsigDesc.Init(0, rootParameters, 0, nullptr, rootSignatureFlags);
+
 
    DirectX::CreateRootSignature(deviceresources->GetD3DDevice(), &rsigDesc, m_rootSignature.ReleaseAndGetAddressOf());
  
