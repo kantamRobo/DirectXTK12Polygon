@@ -75,6 +75,27 @@ public:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_outputResource;
 
 public:
+    ~HelloDXR()
+    {
+
+		m_globalRootSig->Release();
+
+		m_rtPipelineState->Release();
+		vertexBuffer->Release();
+		tlasResultBuffer->Release();
+		blasResultBuffer->Release();
+		scratchBuffer->Release();
+		instanceUploadBuffer->Release();
+		m_rtStateObject->Release();
+		tlasDescriptorHeap->Release();
+		uavDescriptorHeap->Release();
+		rayGenShaderTableBuffer->Release();
+		missShaderTableBuffer->Release();
+		hitGroupShaderTableBuffer->Release();
+		dxilLib->Release();
+		m_outputResource->Release();
+
+    }
     // UINT”Å
     UINT Align(UINT size, UINT alignment)
     {
