@@ -25,6 +25,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12GeometricPrimiti
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12DXRPolygon", "DirectXTK12DXRPolygon\DirectXTK12DXRPolygon.vcxproj", "{76E0A4BA-CBF8-4EF0-BBC4-962E90F143B6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12_ComputeRasterizer", "DirectXTK12_ComputeRasterizer\DirectXTK12_ComputeRasterizer.vcxproj", "{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -121,6 +123,14 @@ Global
 		{76E0A4BA-CBF8-4EF0-BBC4-962E90F143B6}.Release|x64.Build.0 = Release|x64
 		{76E0A4BA-CBF8-4EF0-BBC4-962E90F143B6}.Release|x86.ActiveCfg = Release|Win32
 		{76E0A4BA-CBF8-4EF0-BBC4-962E90F143B6}.Release|x86.Build.0 = Release|Win32
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Debug|x64.ActiveCfg = Debug|x64
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Debug|x64.Build.0 = Debug|x64
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Debug|x86.ActiveCfg = Debug|Win32
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Debug|x86.Build.0 = Debug|Win32
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Release|x64.ActiveCfg = Release|x64
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Release|x64.Build.0 = Release|x64
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Release|x86.ActiveCfg = Release|Win32
+		{E2A7D8F1-3B4C-5E6F-7A8B-9C0D1E2F3A4B}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
