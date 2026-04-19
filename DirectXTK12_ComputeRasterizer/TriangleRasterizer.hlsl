@@ -61,7 +61,6 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
             float interpolatedInvW = w0 * invW0 + w1 * invW1 + w2 * invW2;
             float currentW = 1.0f / interpolatedInvW;
             float currentDepth = c0.z * invW0 * w0 + c1.z * invW1 * w1 + c2.z * invW2 * w2;
-            currentDepth *= currentW;
             if (currentDepth < bestDepth) {
                 bestDepth = currentDepth;
                 float2 uv0_p = v0_raw.uv * invW0;

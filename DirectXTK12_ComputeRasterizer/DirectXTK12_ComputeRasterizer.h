@@ -28,6 +28,8 @@ public:
                     DX::DeviceResources* deviceResources,
                     int width, int height);
 
+    void Resize(DX::DeviceResources* deviceResources, int width, int height);
+
     void Render(DX::DeviceResources* deviceResources);
 
 private:

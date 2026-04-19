@@ -291,6 +291,50 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     }
 }
 
+void DirectXTK12_ComputeRasterizer::Resize(
+    DX::DeviceResources* deviceResources,
+    int width, int height)
+{
+    if (m_width == width && m_height == height)
+        return;
+
+    m_width  = width;
+    m_height = height;
+
+    auto device = deviceResources->GetD3DDevice();
+
+    // Release old output texture (GPU is idle at this point, called after WaitForGpu)
+    m_outputTexture.Reset();
+
+    // Recreate UAV output texture with the new dimensions
+    {
+        DXGI_FORMAT fmt = deviceResources->GetBackBufferFormat();
+        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
+        D3D12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+            fmt,
+            static_cast<UINT>(width), static_cast<UINT>(height),
+            1, 1, 1, 0,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        DX::ThrowIfFailed(device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &texDesc,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            nullptr,
+            IID_PPV_ARGS(&m_outputTexture)));
+        m_outputTexture->SetName(L"ComputeRasterizerOutput");
+    }
+
+    // Update the UAV descriptor in slot 0 to point at the new texture
+    {
+        auto cpuBase = m_descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        uavDesc.Format        = deviceResources->GetBackBufferFormat();
+        device->CreateUnorderedAccessView(m_outputTexture.Get(), nullptr, &uavDesc, cpuBase);
+    }
+}
+
 void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
 {
     auto commandList = deviceResources->GetCommandList();
