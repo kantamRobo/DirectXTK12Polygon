@@ -133,6 +133,9 @@ void Game::OnWindowSizeChanged(int width, int height)
     if (!m_deviceResources->WindowSizeChanged(width, height))
         return;
 
+    m_width  = width;
+    m_height = height;
+
     CreateWindowSizeDependentResources();
 }
 
@@ -163,6 +166,10 @@ void Game::CreateDeviceDependentResources()
 // Allocate all memory resources that change on a window SizeChanged event.
 void Game::CreateWindowSizeDependentResources()
 {
+    if (m_computeRasterizer)
+    {
+        m_computeRasterizer->Resize(m_deviceResources.get(), m_width, m_height);
+    }
 }
 
 void Game::OnDeviceLost()
