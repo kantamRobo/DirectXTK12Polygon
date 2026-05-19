@@ -5,9 +5,159 @@
 #include "DirectXTK12_ComputeRasterizer.h"
 #include <d3dcompiler.h>
 #include <d3dx12.h>
-
+#include <DirectXHelpers.h>
+enum Descriptors
+{
+    WindowsLogo,
+    CourierFont,
+    ControllerFont,
+    GamerPic,
+    Count
+};
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
+
+
+void DirectXTK12_ComputeRasterizer::CreateTexture(DX::DeviceResources* DR)
+{
+    auto device = DR->GetD3DDevice();
+    auto commandQueue = DR->GetCommandQueue();
+
+    // 1. DirectXTex を用いて画像ファイルを読み込む
+    DirectX::TexMetadata metadata;
+    DirectX::ScratchImage image;
+    /*
+      struct DIRECTX_TEX_API TexMetadata
+    {
+        size_t          width;
+        size_t          height;     // Should be 1 for 1D textures
+        size_t          depth;      // Should be 1 for 1D or 2D textures
+        size_t          arraySize;  // For cubemap, this is a multiple of 6
+        size_t          mipLevels;
+        uint32_t        miscFlags;
+        uint32_t        miscFlags2;
+        DXGI_FORMAT     format;
+        TEX_DIMENSION   dimension;
+
+        size_t __cdecl ComputeIndex(size_t mip, size_t item, size_t slice) const noexcept;
+            // Returns size_t(-1) to indicate an out-of-range error
+
+        bool __cdecl IsCubemap() const noexcept { return (miscFlags & TEX_MISC_TEXTURECUBE) != 0; }
+            // Helper for miscFlags
+
+        bool __cdecl IsPMAlpha() const noexcept { return ((miscFlags2 & TEX_MISC2_ALPHA_MODE_MASK) == TEX_ALPHA_MODE_PREMULTIPLIED) != 0; }
+        void __cdecl SetAlphaMode(TEX_ALPHA_MODE mode) noexcept { miscFlags2 = (miscFlags2 & ~static_cast<uint32_t>(TEX_MISC2_ALPHA_MODE_MASK)) | static_cast<uint32_t>(mode); }
+        TEX_ALPHA_MODE __cdecl GetAlphaMode() const noexcept { return static_cast<TEX_ALPHA_MODE>(miscFlags2 & TEX_MISC2_ALPHA_MODE_MASK); }
+            // Helpers for miscFlags2
+
+        bool __cdecl IsVolumemap() const noexcept { return (dimension == TEX_DIMENSION_TEXTURE3D); }
+            // Helper for dimension
+
+        uint32_t __cdecl CalculateSubresource(size_t mip, size_t item) const noexcept;
+        uint32_t __cdecl CalculateSubresource(size_t mip, size_t item, size_t plane) const noexcept;
+            // Returns size_t(-1) to indicate an out-of-range error
+    };
+    */
+  /*
+  struct Image
+{
+    size_t      width;
+    size_t      height;
+    DXGI_FORMAT format;
+    size_t      rowPitch;
+    size_t      slicePitch;
+    uint8_t*    pixels;
+}
+  */
+	metadata.width = 512;
+	metadata.height = 512;
+	metadata.depth = 1;
+	metadata.arraySize = 1;
+	metadata.mipLevels = 1;
+	metadata.miscFlags = 0;
+	metadata.miscFlags2 = 0;
+	metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+	metadata.SetAlphaMode(TEX_ALPHA_MODE_OPAQUE);
+
+    // 2. テクスチャリソース(ID3D12Resource)の作成
+    DX::ThrowIfFailed(
+        DirectX::CreateTexture(
+            device,
+            metadata,
+            m_outputTexture.ReleaseAndGetAddressOf()
+        )
+    );
+
+    // 3. アップロード用のサブリソースデータを準備する
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+    DX::ThrowIfFailed(
+        DirectX::PrepareUpload(
+            device,
+            image.GetImages(),
+            image.GetImageCount(),
+            metadata,
+            subresources
+        )
+    );
+
+    // 4. ResourceUploadBatch を使用して GPU へデータをアップロード
+    ResourceUploadBatch resourceUpload(device);
+    resourceUpload.Begin();
+
+    resourceUpload.Upload(
+        tex.Get(),
+        0,
+        subresources.data(),
+        static_cast<UINT>(subresources.size())
+    );
+
+    // リソースステートをシェーダーリソースに移行
+    resourceUpload.Transition(
+        tex.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    );
+
+    // アップロードを実行し、完了まで待機
+    auto uploadResourcesFinished = resourceUpload.End(commandQueue);
+    uploadResourcesFinished.wait();
+
+    // 5. SRV (Shader Resource View) の作成
+    // DirectXTK12の DirectXHelpers にある CreateShaderResourceView ヘルパー関数を利用して記述を簡略化
+    DirectX::CreateShaderResourceView(
+        device,
+        tex.Get(),
+        resourceDescriptors->GetCpuHandle(0)
+    );
+
+
+    // 6. サンプラーの作成 (既存コードのまま)
+    D3D12_SAMPLER_DESC desc = {
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        0,
+        D3D12_MAX_MAXANISOTROPY,
+        D3D12_COMPARISON_FUNC_NEVER,
+        { 0, 0, 0, 0 },
+        0,
+        D3D12_FLOAT32_MAX
+    };
+
+    // ヒープの0番目に書き込む
+    device->CreateSampler(
+        &desc,
+        resourceDescriptors->GetCpuHandle(0)
+    );
+}
+
+
+//ディスクリプタヒープ内の配置
+// UAV (u0) - 出力テクスチャ
+// SRV (t0) - 頂点バッファ (StructuredBuffer<Vertex>)
+// SRV (t1) - フォールバックテクスチャ (白黒のチェッカーボードなど)
 
 // Helper function to create and serialize root signature
 static ComPtr<ID3D12RootSignature> CreateRootSignature(
@@ -72,9 +222,12 @@ static ComPtr<ID3D12RootSignature> CreateRootSignature(
         IID_PPV_ARGS(&rootSignature)));
 
     rootSignature->SetName(L"ComputeRasterizerRootSignature");
+
     return rootSignature;
 }
-
+// Slot 0: UAV for output texture (u0)
+// Slot 1: SRV for vertex buffer (t0 — StructuredBuffer<Vertex>)
+// Slot 2: SRV for fallback texture (t1)
 // Helper function to create descriptor heap views
 static void CreateDescriptorViews(
     ID3D12Device* device,
@@ -93,7 +246,9 @@ static void CreateDescriptorViews(
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         uavDesc.Format = backBufferFormat;
-        device->CreateUnorderedAccessView(outputTexture, nullptr, &uavDesc, cpuBase);
+        DirectX::CreateUnorderedAccessView(
+            device,
+            outputTexture,cpuBase);
     }
 
     // Slot 1: SRV for vertex buffer (t0 — StructuredBuffer<Vertex>)
@@ -111,6 +266,10 @@ static void CreateDescriptorViews(
         srvDesc.Buffer.NumElements = static_cast<UINT>(triangleCount * 3);
         srvDesc.Buffer.StructureByteStride = sizeof(Vertex);
         device->CreateShaderResourceView(vertexBuffer, &srvDesc, srvHandle);
+        DirectX:CreateShaderResourceView(
+            device,
+            vertexBuffer,
+			srvHandle);
     }
 
     // Slot 2: SRV for fallback texture (t1)
@@ -127,7 +286,10 @@ static void CreateDescriptorViews(
         srvDesc.Texture2D.MipLevels = 1;
         srvDesc.Texture2D.MostDetailedMip = 0;
         srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-        device->CreateShaderResourceView(fallbackTexture, &srvDesc, srvHandle);
+     
+        DirectX::CreateShaderResourceView(
+            device,
+            fallbackTexture, srvHandle);
     }
 }
 
@@ -185,37 +347,11 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     // 4. Create UAV output texture (same format as back buffer)
     // ------------------------------------------------------------------
     {
-        DXGI_FORMAT fmt = deviceResources->GetBackBufferFormat();
-        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
-        D3D12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-            fmt,
-            static_cast<UINT>(width), static_cast<UINT>(height),
-            1, 1, 1, 0,
-            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-        DX::ThrowIfFailed(device->CreateCommittedResource(
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &texDesc,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            nullptr,
-            IID_PPV_ARGS(&m_outputTexture)));
-        m_outputTexture->SetName(L"ComputeRasterizerOutput");
+    
+      
     }
 
-    // ------------------------------------------------------------------
-    // 5. Create CBV_SRV_UAV descriptor heap (3 descriptors)
-    // ------------------------------------------------------------------
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        heapDesc.NumDescriptors = DescriptorCount;
-        heapDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        DX::ThrowIfFailed(device->CreateDescriptorHeap(&heapDesc,
-                                                        IID_PPV_ARGS(&m_descriptorHeap)));
-        m_descriptorSize = device->GetDescriptorHandleIncrementSize(
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        m_descriptorHeap->SetName(L"ComputeRasterizerDescHeap");
-    }
+  
 
     // ------------------------------------------------------------------
     // 6. Create vertex buffer (UPLOAD heap) and fill with a test triangle
@@ -330,18 +466,13 @@ void DirectXTK12_ComputeRasterizer::Initialize(
         // uploadBuffer is released here (after GPU is done)
     }
 
-    // ------------------------------------------------------------------
-    // 8. Create views in the descriptor heap using helper function
-    // ------------------------------------------------------------------
-    CreateDescriptorViews(
-        device,
-        m_descriptorHeap.Get(),
-        m_descriptorSize,
-        m_outputTexture.Get(),
-        m_vertexBuffer.Get(),
-        m_fallbackTexture.Get(),
-        m_triangleCount,
-        deviceResources->GetBackBufferFormat());
+	//コンピュートシェーダー・頂点・フォールバックテクスチャ用のディスクリプタヒープを作成
+    resourceDescriptors = std::make_unique<DescriptorHeap>(device,
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        3);
+
+  
 }
 
 void DirectXTK12_ComputeRasterizer::Resize(

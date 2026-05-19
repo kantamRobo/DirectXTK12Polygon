@@ -3,7 +3,9 @@
 #include "DeviceResources.h"
 #include <GraphicsMemory.h>
 #include <memory>
-
+#include <EffectPipelineStateDescription.h>
+#include <DescriptorHeap.h>
+#include <DirectXTex.h>
 // Vertex structure matching the HLSL StructuredBuffer<Vertex>
 struct Vertex {
     DirectX::XMFLOAT3 pos;
@@ -32,6 +34,7 @@ public:
 
     void Render(DX::DeviceResources* deviceResources);
 
+    void CreateTexture(DX::DeviceResources* DR);
 private:
     int    m_width         = 0;
     int    m_height        = 0;
@@ -54,6 +57,7 @@ private:
     UINT m_descriptorSize = 0;
 
     DirectX::GraphicsMemory* m_graphicsMemory = nullptr;
+	std::unique_ptr<DirectX::DescriptorHeap> resourceDescriptors;
 
     // Descriptor heap slot indices
     enum DescriptorIndex : int
