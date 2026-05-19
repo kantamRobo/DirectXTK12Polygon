@@ -9,6 +9,128 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+// Helper function to create and serialize root signature
+static ComPtr<ID3D12RootSignature> CreateRootSignature(
+    ID3D12Device* device)
+{
+    // Define descriptor ranges
+    CD3DX12_DESCRIPTOR_RANGE uavRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE srvRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
+
+    // Define root parameters
+    CD3DX12_ROOT_PARAMETER rootParams[3];
+    rootParams[0].InitAsDescriptorTable(1, &uavRange, D3D12_SHADER_VISIBILITY_ALL);
+    rootParams[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_ALL);
+    rootParams[2].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+
+    // Define static sampler
+    CD3DX12_STATIC_SAMPLER_DESC staticSampler(
+        0,                                      // shader register
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,       // filter
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressU
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressV
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressW
+        0.0f,                                   // mipLODBias
+        16,                                     // maxAnisotropy
+        D3D12_COMPARISON_FUNC_NEVER,           // comparisonFunc
+        D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+        0.0f,                                   // minLOD
+        D3D12_FLOAT32_MAX,                     // maxLOD
+        D3D12_SHADER_VISIBILITY_ALL);
+
+    // Create root signature descriptor
+    CD3DX12_ROOT_SIGNATURE_DESC rsDesc(
+        3, rootParams,
+        1, &staticSampler,
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+    // Serialize root signature
+    ComPtr<ID3DBlob> serializedRS;
+    ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(
+        &rsDesc,
+        D3D_ROOT_SIGNATURE_VERSION_1,
+        &serializedRS,
+        &errorBlob);
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA("Root Signature Error: ");
+            OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+        }
+        DX::ThrowIfFailed(hr);
+    }
+
+    // Create root signature
+    ComPtr<ID3D12RootSignature> rootSignature;
+    DX::ThrowIfFailed(device->CreateRootSignature(
+        0,
+        serializedRS->GetBufferPointer(),
+        serializedRS->GetBufferSize(),
+        IID_PPV_ARGS(&rootSignature)));
+
+    rootSignature->SetName(L"ComputeRasterizerRootSignature");
+    return rootSignature;
+}
+
+// Helper function to create descriptor heap views
+static void CreateDescriptorViews(
+    ID3D12Device* device,
+    ID3D12DescriptorHeap* heap,
+    UINT descriptorSize,
+    ID3D12Resource* outputTexture,
+    ID3D12Resource* vertexBuffer,
+    ID3D12Resource* fallbackTexture,
+    UINT triangleCount,
+    DXGI_FORMAT backBufferFormat)
+{
+    auto cpuBase = heap->GetCPUDescriptorHandleForHeapStart();
+
+    // Slot 0: UAV for output texture (u0)
+    {
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        uavDesc.Format = backBufferFormat;
+        device->CreateUnorderedAccessView(outputTexture, nullptr, &uavDesc, cpuBase);
+    }
+
+    // Slot 1: SRV for vertex buffer (t0 — StructuredBuffer<Vertex>)
+    {
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
+            cpuBase,
+            1,  // SRV_VertexBuffer slot
+            descriptorSize);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Buffer.FirstElement = 0;
+        srvDesc.Buffer.NumElements = static_cast<UINT>(triangleCount * 3);
+        srvDesc.Buffer.StructureByteStride = sizeof(Vertex);
+        device->CreateShaderResourceView(vertexBuffer, &srvDesc, srvHandle);
+    }
+
+    // Slot 2: SRV for fallback texture (t1)
+    {
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
+            cpuBase,
+            2,  // SRV_Texture slot
+            descriptorSize);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Texture2D.MipLevels = 1;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+        device->CreateShaderResourceView(fallbackTexture, &srvDesc, srvHandle);
+    }
+}
+
 void DirectXTK12_ComputeRasterizer::Initialize(
     DirectX::GraphicsMemory* graphicsMemory,
     DX::DeviceResources*     deviceResources,
@@ -45,54 +167,9 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     }
 
     // ------------------------------------------------------------------
-    // 2. Create root signature
-    //    [0] Descriptor table: 1 UAV  (u0)
-    //    [1] Descriptor table: 2 SRVs (t0, t1)
-    //    [2] Root CBV          (b0)
-    //    Static sampler        (s0)
+    // 2. Create root signature using helper function
     // ------------------------------------------------------------------
-    CD3DX12_DESCRIPTOR_RANGE uavRange;
-    uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-
-    CD3DX12_DESCRIPTOR_RANGE srvRange;
-    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
-
-    CD3DX12_ROOT_PARAMETER rootParams[3];
-    rootParams[0].InitAsDescriptorTable(1, &uavRange);
-    rootParams[1].InitAsDescriptorTable(1, &srvRange);
-    rootParams[2].InitAsConstantBufferView(0);
-
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.MipLODBias       = 0.0f;
-    staticSampler.MaxAnisotropy    = 1;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
-    staticSampler.BorderColor      = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-    staticSampler.MinLOD           = 0.0f;
-    staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSampler.ShaderRegister   = 0;
-    staticSampler.RegisterSpace    = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-    CD3DX12_ROOT_SIGNATURE_DESC rsDesc(3, rootParams, 1, &staticSampler);
-
-    ComPtr<ID3DBlob> serializedRS;
-    ComPtr<ID3DBlob> rsError;
-    hr = D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-                                     &serializedRS, &rsError);
-    if (FAILED(hr))
-    {
-        if (rsError)
-            OutputDebugStringA(static_cast<const char*>(rsError->GetBufferPointer()));
-        DX::ThrowIfFailed(hr);
-    }
-    DX::ThrowIfFailed(device->CreateRootSignature(
-        0,
-        serializedRS->GetBufferPointer(), serializedRS->GetBufferSize(),
-        IID_PPV_ARGS(&m_rootSignature)));
+    m_rootSignature = CreateRootSignature(device);
 
     // ------------------------------------------------------------------
     // 3. Create compute pipeline state object
@@ -102,6 +179,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
     DX::ThrowIfFailed(device->CreateComputePipelineState(&psoDesc,
                                                           IID_PPV_ARGS(&m_pipelineState)));
+    m_pipelineState->SetName(L"ComputeRasterizerPipeline");
 
     // ------------------------------------------------------------------
     // 4. Create UAV output texture (same format as back buffer)
@@ -136,6 +214,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
                                                         IID_PPV_ARGS(&m_descriptorHeap)));
         m_descriptorSize = device->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        m_descriptorHeap->SetName(L"ComputeRasterizerDescHeap");
     }
 
     // ------------------------------------------------------------------
@@ -235,11 +314,12 @@ void DirectXTK12_ComputeRasterizer::Initialize(
         initCmdList->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
 
         // Transition to NON_PIXEL_SHADER_RESOURCE for the compute stage
-        D3D12_RESOURCE_BARRIER toSRV = CD3DX12_RESOURCE_BARRIER::Transition(
+        // Using DirectXTK12 helper for cleaner barrier creation
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_fallbackTexture.Get(),
             D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        initCmdList->ResourceBarrier(1, &toSRV);
+        initCmdList->ResourceBarrier(1, &barrier);
 
         DX::ThrowIfFailed(initCmdList->Close());
 
@@ -251,44 +331,17 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     }
 
     // ------------------------------------------------------------------
-    // 8. Create views in the descriptor heap
+    // 8. Create views in the descriptor heap using helper function
     // ------------------------------------------------------------------
-    auto cpuBase = m_descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-
-    // Slot 0: UAV for output texture (u0)
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = cpuBase;
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-        uavDesc.Format        = deviceResources->GetBackBufferFormat();
-        device->CreateUnorderedAccessView(m_outputTexture.Get(), nullptr, &uavDesc, handle);
-    }
-
-    // Slot 1: SRV for vertex buffer (t0 — StructuredBuffer<Vertex>)
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = cpuBase;
-        handle.ptr += static_cast<SIZE_T>(m_descriptorSize) * SRV_VertexBuffer;
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.ViewDimension               = D3D12_SRV_DIMENSION_BUFFER;
-        srvDesc.Format                      = DXGI_FORMAT_UNKNOWN;
-        srvDesc.Shader4ComponentMapping     = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Buffer.FirstElement         = 0;
-        srvDesc.Buffer.NumElements          = static_cast<UINT>(m_triangleCount * 3);
-        srvDesc.Buffer.StructureByteStride  = sizeof(Vertex);
-        device->CreateShaderResourceView(m_vertexBuffer.Get(), &srvDesc, handle);
-    }
-
-    // Slot 2: SRV for fallback texture (t1)
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = cpuBase;
-        handle.ptr += static_cast<SIZE_T>(m_descriptorSize) * SRV_Texture;
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.ViewDimension               = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Format                      = DXGI_FORMAT_R8G8B8A8_UNORM;
-        srvDesc.Shader4ComponentMapping     = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Texture2D.MipLevels         = 1;
-        device->CreateShaderResourceView(m_fallbackTexture.Get(), &srvDesc, handle);
-    }
+    CreateDescriptorViews(
+        device,
+        m_descriptorHeap.Get(),
+        m_descriptorSize,
+        m_outputTexture.Get(),
+        m_vertexBuffer.Get(),
+        m_fallbackTexture.Get(),
+        m_triangleCount,
+        deviceResources->GetBackBufferFormat());
 }
 
 void DirectXTK12_ComputeRasterizer::Resize(
@@ -367,8 +420,10 @@ void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
     commandList->SetComputeRootDescriptorTable(0, gpuBase);
 
     // Root parameter 1: SRV descriptor table (heap slots 1-2)
-    D3D12_GPU_DESCRIPTOR_HANDLE srvStart = gpuBase;
-    srvStart.ptr += static_cast<UINT64>(m_descriptorSize) * SRV_VertexBuffer;
+    CD3DX12_GPU_DESCRIPTOR_HANDLE srvStart(
+        gpuBase,
+        SRV_VertexBuffer,
+        m_descriptorSize);
     commandList->SetComputeRootDescriptorTable(1, srvStart);
 
     // Root parameter 2: root CBV (GPU virtual address from GraphicsMemory alloc)
@@ -381,41 +436,45 @@ void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
     const UINT dispatchY = (static_cast<UINT>(m_height) + 15) / 16;
     commandList->Dispatch(dispatchX, dispatchY, 1);
 
+    // ------------------------------------------------------------------
+    // Resource Barriers - Optimized using DirectXTK12 patterns
+    // Reference: https://github.com/microsoft/DirectXTK12/wiki/Resource-Barriers
+    // ------------------------------------------------------------------
+
     // UAV barrier to ensure all compute writes are visible before the copy
-    D3D12_RESOURCE_BARRIER uavBarrier =
-        CD3DX12_RESOURCE_BARRIER::UAV(m_outputTexture.Get());
+    auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_outputTexture.Get());
     commandList->ResourceBarrier(1, &uavBarrier);
 
-    // ------------------------------------------------------------------
-    // Copy output texture to back buffer
-    // ------------------------------------------------------------------
-    // Transition output texture: UNORDERED_ACCESS -> COPY_SOURCE
-    D3D12_RESOURCE_BARRIER outToSrc = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_outputTexture.Get(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_COPY_SOURCE);
-    commandList->ResourceBarrier(1, &outToSrc);
+    // Batch transition barriers for better performance
+    D3D12_RESOURCE_BARRIER transitionBarriers[2] = {
+        // Transition output texture: UNORDERED_ACCESS -> COPY_SOURCE
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_outputTexture.Get(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_COPY_SOURCE),
+        // Transition back buffer: RENDER_TARGET -> COPY_DEST
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            backBuffer,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_COPY_DEST)
+    };
+    commandList->ResourceBarrier(2, transitionBarriers);
 
-    // Transition back buffer: RENDER_TARGET -> COPY_DEST
-    D3D12_RESOURCE_BARRIER bbToDest = CD3DX12_RESOURCE_BARRIER::Transition(
-        backBuffer,
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_COPY_DEST);
-    commandList->ResourceBarrier(1, &bbToDest);
-
+    // Perform the copy operation
     commandList->CopyResource(backBuffer, m_outputTexture.Get());
 
-    // Transition back buffer: COPY_DEST -> RENDER_TARGET (required by Present)
-    D3D12_RESOURCE_BARRIER bbToRT = CD3DX12_RESOURCE_BARRIER::Transition(
-        backBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-    commandList->ResourceBarrier(1, &bbToRT);
-
-    // Transition output texture: COPY_SOURCE -> UNORDERED_ACCESS (ready for next frame)
-    D3D12_RESOURCE_BARRIER outToUAV = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_outputTexture.Get(),
-        D3D12_RESOURCE_STATE_COPY_SOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    commandList->ResourceBarrier(1, &outToUAV);
+    // Batch transition barriers back to their original states
+    D3D12_RESOURCE_BARRIER returnBarriers[2] = {
+        // Transition back buffer: COPY_DEST -> RENDER_TARGET (required by Present)
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            backBuffer,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_RENDER_TARGET),
+        // Transition output texture: COPY_SOURCE -> UNORDERED_ACCESS (ready for next frame)
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_outputTexture.Get(),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+    };
+    commandList->ResourceBarrier(2, returnBarriers);
 }
