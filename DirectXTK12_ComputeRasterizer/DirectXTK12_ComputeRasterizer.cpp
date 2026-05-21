@@ -106,7 +106,7 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(DX::DeviceResources* DR)
     resourceUpload.Begin();
 
     resourceUpload.Upload(
-        tex.Get(),
+		m_outputTexture.Get(),
         0,
         subresources.data(),
         static_cast<UINT>(subresources.size())
@@ -152,7 +152,6 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(DX::DeviceResources* DR)
         resourceDescriptors->GetCpuHandle(0)
     );
 }
-
 
 //ディスクリプタヒープ内の配置
 // UAV (u0) - 出力テクスチャ
@@ -370,92 +369,63 @@ void DirectXTK12_ComputeRasterizer::Initialize(
        
 
        
-        
+       
         memcpy(m_VertexBuffer.Memory(), triangleVertices, vbSize);
        
     }
 
     // ------------------------------------------------------------------
-    // 7. Create 1x1 white fallback texture (DEFAULT heap via temp cmd list)
+    // 7. Create 1x1 white fallback texture using DirectXTex CreateTexture + TexMetadata
     // ------------------------------------------------------------------
     {
-        // Create dedicated command allocator/list for initialization upload
-        ComPtr<ID3D12CommandAllocator>    initCmdAlloc;
-        ComPtr<ID3D12GraphicsCommandList> initCmdList;
-        DX::ThrowIfFailed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                          IID_PPV_ARGS(&initCmdAlloc)));
-        DX::ThrowIfFailed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                     initCmdAlloc.Get(), nullptr,
-                                                     IID_PPV_ARGS(&initCmdList)));
+        // Prepare metadata describing a 1x1 RGBA8 texture
+        DirectX::TexMetadata fbMeta = {};
+        fbMeta.width = 1;
+        fbMeta.height = 1;
+        fbMeta.depth = 1;
+        fbMeta.arraySize = 1;
+        fbMeta.mipLevels = 1;
+        fbMeta.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        fbMeta.dimension = TEX_DIMENSION_TEXTURE2D;
+        fbMeta.SetAlphaMode(TEX_ALPHA_MODE_OPAQUE);
 
-        // Texture resource in DEFAULT heap
-        CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-        D3D12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-            DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1);
-        DX::ThrowIfFailed(device->CreateCommittedResource(
-            &defaultHeap,
-            D3D12_HEAP_FLAG_NONE,
-            &texDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&m_fallbackTexture)));
+        // Create the GPU resource via DirectXTex helper
+        DX::ThrowIfFailed(
+            DirectX::CreateTexture(
+                device,
+                fbMeta,
+                m_fallbackTexture.ReleaseAndGetAddressOf()
+            )
+        );
         m_fallbackTexture->SetName(L"ComputeRasterizerFallbackTexture");
 
-        // Get footprint so we know the upload buffer size
-        UINT64 uploadSize = 0;
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
-        device->GetCopyableFootprints(&texDesc, 0, 1, 0,
-                                      &footprint, nullptr, nullptr, &uploadSize);
+        // Prepare a single D3D12_SUBRESOURCE_DATA containing a white pixel
+        const uint32_t whitePixel = 0xFFFFFFFFu; // RGBA = 255,255,255,255
+        D3D12_SUBRESOURCE_DATA subresource = {};
+        subresource.pData = &whitePixel;
+        subresource.RowPitch = sizeof(whitePixel);
+        subresource.SlicePitch = sizeof(whitePixel);
 
-        // Upload buffer in UPLOAD heap
-        CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-        D3D12_RESOURCE_DESC uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-        ComPtr<ID3D12Resource> uploadBuffer;
-        DX::ThrowIfFailed(device->CreateCommittedResource(
-            &uploadHeap,
-            D3D12_HEAP_FLAG_NONE,
-            &uploadDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&uploadBuffer)));
+        // Upload using ResourceUploadBatch (handles upload buffer creation internally)
+        ResourceUploadBatch resourceUpload(device);
+        resourceUpload.Begin();
 
-        // Map and fill with white (R=255 G=255 B=255 A=255)
-        const uint32_t whitePixel = 0xFFFFFFFFu;
-        BYTE* mapped = nullptr;
-        D3D12_RANGE readRange = {};
-        DX::ThrowIfFailed(uploadBuffer->Map(0, &readRange,
-                                             reinterpret_cast<void**>(&mapped)));
-        memcpy(mapped, &whitePixel, sizeof(whitePixel));
-        uploadBuffer->Unmap(0, nullptr);
+        resourceUpload.Upload(
+            m_fallbackTexture.Get(),
+            0,
+            &subresource,
+            1
+        );
 
-        // Record copy
-        D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
-        dstLoc.pResource        = m_fallbackTexture.Get();
-        dstLoc.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        dstLoc.SubresourceIndex = 0;
-
-        D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
-        srcLoc.pResource       = uploadBuffer.Get();
-        srcLoc.Type            = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        srcLoc.PlacedFootprint = footprint;
-
-        initCmdList->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
-
-        // Transition to NON_PIXEL_SHADER_RESOURCE for the compute stage
-        // Using DirectXTK12 helper for cleaner barrier creation
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        // Transition to NON_PIXEL_SHADER_RESOURCE for compute usage (matching previous code)
+        resourceUpload.Transition(
             m_fallbackTexture.Get(),
             D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        initCmdList->ResourceBarrier(1, &barrier);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        );
 
-        DX::ThrowIfFailed(initCmdList->Close());
-
-        // Execute and wait for GPU to finish before releasing the upload buffer
-        ID3D12CommandList* cmdLists[] = { initCmdList.Get() };
-        commandQueue->ExecuteCommandLists(1, cmdLists);
-        deviceResources->WaitForGpu();
-        // uploadBuffer is released here (after GPU is done)
+        auto uploadDone = resourceUpload.End(commandQueue);
+        uploadDone.wait();
     }
 
 	//コンピュートシェーダー・頂点・フォールバックテクスチャ用のディスクリプタヒープを作成

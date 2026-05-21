@@ -44,6 +44,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState>   m_pipelineState;
 
     // UAV output texture (written by compute shader, copied to back buffer)
+
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_outputTexture;
     DirectX::GraphicsResource m_VertexBuffer;
     // Structured buffer holding triangle vertices (SRV t0)
