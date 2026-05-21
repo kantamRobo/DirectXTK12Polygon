@@ -45,18 +45,17 @@ private:
 
     // UAV output texture (written by compute shader, copied to back buffer)
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_outputTexture;
-
+    DirectX::GraphicsResource m_VertexBuffer;
     // Structured buffer holding triangle vertices (SRV t0)
-    Microsoft::WRL::ComPtr<ID3D12Resource>        m_vertexBuffer;
-
     // 1x1 white fallback texture (SRV t1)
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_fallbackTexture;
 
     // Combined CBV_SRV_UAV descriptor heap
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>  m_descriptorHeap;
     UINT m_descriptorSize = 0;
-
-    DirectX::GraphicsMemory* m_graphicsMemory = nullptr;
+	DirectX::GraphicsMemory* m_graphicsMemory = nullptr;
+   
+    DirectX::GraphicsResource m_IndexBuffer;
 	std::unique_ptr<DirectX::DescriptorHeap> resourceDescriptors;
 
     // Descriptor heap slot indices

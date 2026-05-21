@@ -265,7 +265,6 @@ static void CreateDescriptorViews(
         srvDesc.Buffer.FirstElement = 0;
         srvDesc.Buffer.NumElements = static_cast<UINT>(triangleCount * 3);
         srvDesc.Buffer.StructureByteStride = sizeof(Vertex);
-        device->CreateShaderResourceView(vertexBuffer, &srvDesc, srvHandle);
         DirectX:CreateShaderResourceView(
             device,
             vertexBuffer,
@@ -365,22 +364,15 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     m_triangleCount = 1;
     const UINT vbSize = sizeof(triangleVertices);
     {
-        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
-        D3D12_RESOURCE_DESC bufDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
-        DX::ThrowIfFailed(device->CreateCommittedResource(
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &bufDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_vertexBuffer)));
+        
+		m_VertexBuffer = graphicsMemory->Allocate(vbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        
+       
 
-        void* mapped = nullptr;
-        D3D12_RANGE readRange = {};
-        DX::ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, &mapped));
-        memcpy(mapped, triangleVertices, vbSize);
-        m_vertexBuffer->Unmap(0, nullptr);
-        m_vertexBuffer->SetName(L"ComputeRasterizerVertexBuffer");
+       
+        
+        memcpy(m_VertexBuffer.Memory(), triangleVertices, vbSize);
+       
     }
 
     // ------------------------------------------------------------------
