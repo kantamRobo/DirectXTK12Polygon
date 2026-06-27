@@ -154,13 +154,11 @@ void Game::CreateDeviceDependentResources()
     auto device = m_deviceResources->GetD3DDevice();
 
     // Initialize GraphicsMemory
-    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+   // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // Initialize the compute rasterizer
     m_computeRasterizer = std::make_unique<DirectXTK12_ComputeRasterizer>();
-    m_computeRasterizer->Initialize(m_graphicsMemory.get(),
-                                    m_deviceResources.get(),
-                                    m_width, m_height);
+	m_computeRasterizer->Initialize( m_deviceResources.get(), m_width, m_height);
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.

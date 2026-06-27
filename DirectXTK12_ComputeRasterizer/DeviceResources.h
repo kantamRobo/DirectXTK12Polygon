@@ -47,7 +47,7 @@ namespace DX
         void Present(D3D12_RESOURCE_STATES beforeState = D3D12_RESOURCE_STATE_RENDER_TARGET);
         void WaitForGpu() noexcept;
         void UpdateColorSpace();
-
+        void GetAdapter(IDXGIAdapter1** ppAdapter);
         // Device Accessors.
         RECT GetOutputSize() const noexcept { return m_outputSize; }
 
@@ -70,7 +70,8 @@ namespace DX
         UINT                        GetBackBufferCount() const noexcept    { return m_backBufferCount; }
         DXGI_COLOR_SPACE_TYPE       GetColorSpace() const noexcept         { return m_colorSpace; }
         unsigned int                GetDeviceOptions() const noexcept      { return m_options; }
-
+    public:
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
         CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetView() const noexcept
         {
         #ifdef __MINGW32__
@@ -96,7 +97,7 @@ namespace DX
 
     private:
         void MoveToNextFrame();
-        void GetAdapter(IDXGIAdapter1** ppAdapter);
+       
 
         static constexpr size_t MAX_BACK_BUFFER_COUNT = 3;
 

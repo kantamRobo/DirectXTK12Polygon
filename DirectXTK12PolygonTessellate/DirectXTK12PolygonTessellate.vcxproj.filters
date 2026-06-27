@@ -46,9 +46,6 @@
     </Manifest>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <FxCompile Include="DomainShader.hlsl" />
     <FxCompile Include="HullShader.hlsl" />
     <FxCompile Include="VertexShader.hlsl" />

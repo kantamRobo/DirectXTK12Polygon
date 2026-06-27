@@ -39,7 +39,7 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator,
     // 2. キャンバスの用意（D3D12MAによるリソースの確保）
     // --------------------------------------------------
     CD3DX12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1);
+        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);  
 
     D3D12MA::ALLOCATION_DESC allocDesc = {};
     allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
@@ -49,10 +49,28 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator,
         &texDesc,
         D3D12_RESOURCE_STATE_COPY_DEST, // まずは搬入先の状態として作成
         nullptr,
-        m_fallbackTextureAllocation.ReleaseAndGetAddressOf(),
-        IID_PPV_ARGS(m_fallbackTexture.ReleaseAndGetAddressOf())
+        m_outputTextureAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_outputTexture.ReleaseAndGetAddressOf())
     ));
+	m_outputTexture->SetName(L"OutputTexture");
+    CD3DX12_RESOURCE_DESC backbufferDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1, 1, 0,D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 
+    //バックバッファの用意
+	D3D12MA::ALLOCATION_DESC backBufferAllocDesc = {};
+	backBufferAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+	//バックバッファはレンダーターゲットとして使用するため、ALLOW_RENDER_TARGETフラグを追加
+
+    //バックバッファはテクスチャの書き込み先として使用する
+    DX::ThrowIfFailed(allocator->CreateResource(
+        &backBufferAllocDesc,
+        &backbufferDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        m_backBufferAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_backBuffer.ReleaseAndGetAddressOf())
+	));
+	m_backBuffer->SetName(L"BackBuffer");
     // --------------------------------------------------
     // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
     // --------------------------------------------------
@@ -61,7 +79,7 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator,
 
     // ① 作品の搬入指示
     resourceUpload.Upload(
-        m_fallbackTexture.Get(),
+        m_outputTexture.Get(),
         0,
         &initData,
         1
@@ -70,7 +88,7 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator,
     // ② 設営（状態遷移）の指示
     // ※注意: コンピュートシェーダーで読み取るため NON_PIXEL_SHADER_RESOURCE を指定します
     resourceUpload.Transition(
-        m_fallbackTexture.Get(),
+        m_outputTexture.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     );
@@ -78,32 +96,6 @@ void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator,
     // ③ 指示書の提出と、作業完了の待機
     auto uploadFinished = resourceUpload.End(DR->GetCommandQueue());
     uploadFinished.wait();
-
-    // --------------------------------------------------
-    // 4. キャプションの設置（SRVの作成）
-    // --------------------------------------------------
-    // ※前提: m_descriptorHeap および m_descriptorSize が初期化済みであること
-    if (m_descriptorHeap)
-    {
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Format = texDesc.Format;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MipLevels = 1;
-
-        // ヘッダで定義されている DescriptorIndex::SRV_Texture (t1) の位置にSRVを作成
-        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
-            m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-            DescriptorIndex::SRV_Texture,
-            m_descriptorSize
-        );
-
-        device->CreateShaderResourceView(m_fallbackTexture.Get(), &srvDesc, srvHandle);
-    }
-    else
-    {
-        OutputDebugStringA("Warning: Descriptor heap is not initialized before CreateTexture.\n");
-    }
 }
 //ディスクリプタヒープ内の配置
 // UAV (u0) - 出力テクスチャ
@@ -118,8 +110,8 @@ static ComPtr<ID3D12RootSignature> CreateRootSignature(
     CD3DX12_DESCRIPTOR_RANGE uavRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
     CD3DX12_DESCRIPTOR_RANGE srvRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 
-    // Define root parameters
-    CD3DX12_ROOT_PARAMETER rootParams[3];
+    // Define root parameters - Initialize to zero first to avoid C6001 warning
+    CD3DX12_ROOT_PARAMETER rootParams[3] = {};
     rootParams[0].InitAsDescriptorTable(1, &uavRange, D3D12_SHADER_VISIBILITY_ALL);
     rootParams[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_ALL);
     rootParams[2].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -181,8 +173,8 @@ static ComPtr<ID3D12RootSignature> CreateRootSignature(
 // Slot 2: SRV for fallback texture (t1)
 // Helper function to create descriptor heap views
 static void CreateDescriptorViews(
+	DirectX::DescriptorHeap* heap,
     ID3D12Device* device,
-    ID3D12DescriptorHeap* heap,
     UINT descriptorSize,
     ID3D12Resource* outputTexture,
     ID3D12Resource* vertexBuffer,
@@ -190,7 +182,7 @@ static void CreateDescriptorViews(
     UINT triangleCount,
     DXGI_FORMAT backBufferFormat)
 {
-    auto cpuBase = heap->GetCPUDescriptorHandleForHeapStart();
+	auto cpuBase = heap->GetCpuHandle(0);
 
     // Slot 0: UAV for output texture (u0)
     {
@@ -199,16 +191,12 @@ static void CreateDescriptorViews(
         uavDesc.Format = backBufferFormat;
         DirectX::CreateUnorderedAccessView(
             device,
-            outputTexture,cpuBase);
+            outputTexture,
+            cpuBase);
     }
 
     // Slot 1: SRV for vertex buffer (t0 — StructuredBuffer<Vertex>)
     {
-        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
-            cpuBase,
-            1,  // SRV_VertexBuffer slot
-            descriptorSize);
-
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -216,18 +204,16 @@ static void CreateDescriptorViews(
         srvDesc.Buffer.FirstElement = 0;
         srvDesc.Buffer.NumElements = static_cast<UINT>(triangleCount * 3);
         srvDesc.Buffer.StructureByteStride = sizeof(Vertex);
-        DirectX:CreateShaderResourceView(
+        DirectX::CreateBufferShaderResourceView(
             device,
             vertexBuffer,
-			srvHandle);
+            heap->GetCpuHandle(1),
+            sizeof(Vertex));
     }
 
     // Slot 2: SRV for fallback texture (t1)
     {
-        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
-            cpuBase,
-            2,  // SRV_Texture slot
-            descriptorSize);
+        auto srvHandle = heap->GetCpuHandle(2);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -237,14 +223,16 @@ static void CreateDescriptorViews(
         srvDesc.Texture2D.MostDetailedMip = 0;
         srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
      
-        DirectX::CreateShaderResourceView(
-            device,
-            fallbackTexture, srvHandle);
+        device->CreateShaderResourceView(
+            fallbackTexture,
+            &srvDesc,
+            srvHandle);
     }
 }
 
 void DirectXTK12_ComputeRasterizer::Initialize(
-    D3D12MA::Allocator* allocator,
+   
+	
     DX::DeviceResources*     deviceResources,
     int width, int height)
 {
@@ -254,6 +242,8 @@ void DirectXTK12_ComputeRasterizer::Initialize(
 
     auto device       = deviceResources->GetD3DDevice();
     auto commandQueue = deviceResources->GetCommandQueue();
+	auto adapter = deviceResources->adapter.Get(); // 追加: IDXGIAdapterを取得
+    m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(device);
 
     // ------------------------------------------------------------------
     // 1. Compile compute shader at runtime
@@ -268,7 +258,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     HRESULT hr = D3DCompileFromFile(
         L"TriangleRasterizer.hlsl",
         nullptr, nullptr,
-        "CSMain", "cs_5_1",
+        "CSMain", "cs_5_0",
         compileFlags, 0,
         &csBlob, &errorBlob);
     if (FAILED(hr))
@@ -293,36 +283,81 @@ void DirectXTK12_ComputeRasterizer::Initialize(
                                                           IID_PPV_ARGS(&m_pipelineState)));
     m_pipelineState->SetName(L"ComputeRasterizerPipeline");
 
-	m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(device, 0);
-  
 
+
+    D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
+    allocatorDesc.pDevice = device;
+    allocatorDesc.pAdapter = adapter;
+    allocatorDesc.Flags = D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS;
+
+    D3D12MA::Allocator* allocator;
+    HRESULT createallocator = D3D12MA::CreateAllocator(&allocatorDesc, &allocator);
     // ------------------------------------------------------------------
-    // 6. Create vertex buffer (UPLOAD heap) and fill with a test triangle
-    // ------------------------------------------------------------------
-    // Vertices use counter-clockwise winding (area > 0 in screen space)
+ // 6. Create vertex buffer (UPLOAD heap) and fill with a test triangle
+ // ------------------------------------------------------------------
     Vertex triangleVertices[] = {
-        { {  0.0f,  0.5f, 0.5f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.5f, 0.0f } }, // top,          red
-        { { -0.5f, -0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } }, // bottom-left,  green
-        { {  0.5f, -0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } }, // bottom-right, blue
+        { {  0.0f,  0.5f, 0.5f }, { 1.0f, 0.0f, 0.0f, 1.0f }, { 0.5f, 0.0f } },
+        { { -0.5f, -0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } },
+        { {  0.5f, -0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f } },
     };
     m_triangleCount = 1;
     const UINT vbSize = sizeof(triangleVertices);
-    {
-        
-		m_vertexBuffer = m_graphicsMemory->Allocate(vbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        
-       
 
-       
-       
-        memcpy(m_vertexBuffer.Memory(), triangleVertices, vbSize);
-       
-    }
+    // --- 頂点バッファの確保 (D3D12MA) ---
+    D3D12MA::ALLOCATION_DESC vbAllocDesc = {};
+    vbAllocDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD; // 頻繁に書き換えないならDEFAULT推奨ですが、今回は簡略化のためUPLOAD
+
+    CD3DX12_RESOURCE_DESC vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
+    DX::ThrowIfFailed(allocator->CreateResource(
+        &vbAllocDesc,
+        &vbDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        m_vertexBufferAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_vertexBufferResource.ReleaseAndGetAddressOf())
+    ));
+
+    //頂点バッファに名前を付ける
+    m_vertexBufferResource->SetName(L"VertexBufferResource");
+
+
+
+    // 頂点データの書き込み (Mapしてコピー)
+    void* pVertexDataBegin;
+    CD3DX12_RANGE readRange(0, 0); // 読み取りはしない
+    DX::ThrowIfFailed(m_vertexBufferResource->Map(0, &readRange, &pVertexDataBegin));
+    memcpy(pVertexDataBegin, triangleVertices, vbSize);
+    m_vertexBufferResource->Unmap(0, nullptr);
+
+
+    // ------------------------------------------------------------------
+    // 7. 定数バッファの作成とマップ (追加部分)
+    // ------------------------------------------------------------------
+    // 256バイトの倍数にアライメントする
+    UINT cbSizeAligned = (sizeof(CBData) + 255) & ~255;
+    CD3DX12_RESOURCE_DESC cbDesc = CD3DX12_RESOURCE_DESC::Buffer(cbSizeAligned);
+
+    D3D12MA::ALLOCATION_DESC cbAllocDesc = {};
+    cbAllocDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD; // 毎フレーム更新するためUPLOADヒープ
+
+    DX::ThrowIfFailed(allocator->CreateResource(
+        &cbAllocDesc,
+        &cbDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        m_constantBufferAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_constantBufferResource.ReleaseAndGetAddressOf())
+    ));
+    m_constantBufferResource->SetName(L"ConstantBufferResource");
+    // CPU書き込み用のポインタを永続的に取得しておく
+    DX::ThrowIfFailed(m_constantBufferResource->Map(0, &readRange, &m_cbvDataBegin));
+    //バックバッファ用のテクスチャの作成
+	CreateTexture(allocator, deviceResources);
+
     // ==================================================
-        // 1x1 フォールバックテクスチャ（白）の作成 (D3D12MA使用)
-        // ==================================================
-
-        // 1. 絵を描く（データ準備：1x1の真っ白なピクセル）
+    // フォールバックテクスチャ（白）の作成 (D3D12MA使用)
+    // ==================================================
+    // 1. 絵を描く（データ準備：1x1の真っ白なピクセル）
     uint32_t whitePixel = 0xFFFFFFFF;
     D3D12_SUBRESOURCE_DATA initData = {};
     initData.pData = &whitePixel;
@@ -344,7 +379,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
         m_fallbackTextureAllocation.ReleaseAndGetAddressOf(),
         IID_PPV_ARGS(m_fallbackTexture.ReleaseAndGetAddressOf())
     ));
-
+    
     // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
     DirectX::ResourceUploadBatch resourceUpload(device);
     resourceUpload.Begin();
@@ -362,30 +397,27 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     auto uploadFinished = resourceUpload.End(deviceResources->GetCommandQueue());
     uploadFinished.wait();
 
-    // 4. キャプションの設置（SRVの作成）
-    if (m_descriptorHeap)
-    {
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.Format = texDesc.Format;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MipLevels = 1;
-
-        // t1レジスタ相当の SRV_Texture スロットに登録
-        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
-            m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-            DescriptorIndex::SRV_Texture,
-            m_descriptorSize
-        );
-
-        device->CreateShaderResourceView(m_fallbackTexture.Get(), &srvDesc, srvHandle);
-    }
-
-	//コンピュートシェーダー・頂点・フォールバックテクスチャ用のディスクリプタヒープを作成
+    // ==================================================
+    // ディスクリプタヒープの作成（フォールバックテクスチャの準備後）
+    // ==================================================
     resourceDescriptors = std::make_unique<DescriptorHeap>(device,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         3);
+
+    // ==================================================
+    // ディスクリプタビューの作成
+    // ==================================================
+    CreateDescriptorViews(
+        resourceDescriptors.get(),
+        device,
+        resourceDescriptors->Count(),
+        m_outputTexture.Get(),
+        m_vertexBufferResource.Get(),
+        m_fallbackTexture.Get(),
+        m_triangleCount,
+        deviceResources->GetBackBufferFormat()
+    );
 
   
 }
@@ -426,7 +458,7 @@ void DirectXTK12_ComputeRasterizer::Resize(
 
     // Update the UAV descriptor in slot 0 to point at the new texture
     {
-        auto cpuBase = m_descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		auto cpuBase = resourceDescriptors->GetCpuHandle(0);
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         uavDesc.Format        = deviceResources->GetBackBufferFormat();
@@ -437,86 +469,65 @@ void DirectXTK12_ComputeRasterizer::Resize(
 void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
 {
     auto commandList = deviceResources->GetCommandList();
-    auto backBuffer  = deviceResources->GetRenderTarget();
 
     // ------------------------------------------------------------------
-    // Update constant buffer via GraphicsMemory (upload heap, per-frame)
+    // 定数バッファの更新
     // ------------------------------------------------------------------
     CBData cbData = {};
     cbData.worldViewProj = DirectX::XMMatrixIdentity();
-    cbData.screenSize    = DirectX::XMFLOAT2(static_cast<float>(m_width),
-                                              static_cast<float>(m_height));
+    cbData.screenSize = DirectX::XMFLOAT2(static_cast<float>(m_width),
+        static_cast<float>(m_height));
     cbData.triangleCount = m_triangleCount;
-    cbData.padding       = 0.0f;
+    cbData.padding = 0.0f;
 
-    auto cbAlloc = m_graphicsMemory->Allocate(sizeof(CBData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(cbAlloc.Memory(), &cbData, sizeof(CBData));
+    // 正解：Map済みのCPUポインタに対してmemcpyを行う
+    memcpy(m_cbvDataBegin, &cbData, sizeof(CBData));
 
     // ------------------------------------------------------------------
     // Bind descriptor heap and set pipeline state
     // ------------------------------------------------------------------
-    ID3D12DescriptorHeap* heaps[] = { m_descriptorHeap.Get() };
+    ID3D12DescriptorHeap* heaps[] = { resourceDescriptors->Heap() };
     commandList->SetDescriptorHeaps(1, heaps);
 
     commandList->SetComputeRootSignature(m_rootSignature.Get());
     commandList->SetPipelineState(m_pipelineState.Get());
 
-    // Root parameter 0: UAV descriptor table (heap slot 0)
-    auto gpuBase = m_descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    auto gpuBase = resourceDescriptors->GetGpuHandle(0);
     commandList->SetComputeRootDescriptorTable(0, gpuBase);
+    commandList->SetComputeRootDescriptorTable(1, resourceDescriptors->GetGpuHandle(SRV_VertexBuffer));
 
-    // Root parameter 1: SRV descriptor table (heap slots 1-2)
-    CD3DX12_GPU_DESCRIPTOR_HANDLE srvStart(
-        gpuBase,
-        SRV_VertexBuffer,
-        m_descriptorSize);
-    commandList->SetComputeRootDescriptorTable(1, srvStart);
-
-    // Root parameter 2: root CBV (GPU virtual address from GraphicsMemory alloc)
-    commandList->SetComputeRootConstantBufferView(2, cbAlloc.GpuAddress());
+    // ルートパラメータ2: 紐付けは「GPUの仮想アドレス」を渡す
+    commandList->SetComputeRootConstantBufferView(2, m_constantBufferResource->GetGPUVirtualAddress());
 
     // ------------------------------------------------------------------
-    // Dispatch: cover every pixel in a 16x16 tile grid
+    // Dispatch & Resource Barriers (以降は前回修正済みの正しいバリア処理)
     // ------------------------------------------------------------------
-    const UINT dispatchX = (static_cast<UINT>(m_width)  + 15) / 16;
+    const UINT dispatchX = (static_cast<UINT>(m_width) + 15) / 16;
     const UINT dispatchY = (static_cast<UINT>(m_height) + 15) / 16;
     commandList->Dispatch(dispatchX, dispatchY, 1);
 
-    // ------------------------------------------------------------------
-    // Resource Barriers - Optimized using DirectXTK12 patterns
-    // Reference: https://github.com/microsoft/DirectXTK12/wiki/Resource-Barriers
-    // ------------------------------------------------------------------
-
-    // UAV barrier to ensure all compute writes are visible before the copy
     auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_outputTexture.Get());
     commandList->ResourceBarrier(1, &uavBarrier);
 
-    // Batch transition barriers for better performance
     D3D12_RESOURCE_BARRIER transitionBarriers[2] = {
-        // Transition output texture: UNORDERED_ACCESS -> COPY_SOURCE
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_outputTexture.Get(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE),
-        // Transition back buffer: RENDER_TARGET -> COPY_DEST
         CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer,
+            m_backBuffer.Get(),
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_COPY_DEST)
     };
     commandList->ResourceBarrier(2, transitionBarriers);
 
-    // Perform the copy operation
-    commandList->CopyResource(backBuffer, m_outputTexture.Get());
+    commandList->CopyResource(m_backBuffer.Get(), m_outputTexture.Get());
 
-    // Batch transition barriers back to their original states
     D3D12_RESOURCE_BARRIER returnBarriers[2] = {
-        // Transition back buffer: COPY_DEST -> RENDER_TARGET (required by Present)
         CD3DX12_RESOURCE_BARRIER::Transition(
-            backBuffer,
+            m_backBuffer.Get(),
             D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_RENDER_TARGET),
-        // Transition output texture: COPY_SOURCE -> UNORDERED_ACCESS (ready for next frame)
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_outputTexture.Get(),
             D3D12_RESOURCE_STATE_COPY_SOURCE,

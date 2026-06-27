@@ -26,7 +26,8 @@ struct CBData {
 class DirectXTK12_ComputeRasterizer
 {
 public:
-    void Initialize(D3D12MA::Allocator* allocator,
+    void Initialize(
+		
         DX::DeviceResources* deviceResources,
         int width, int height);
 
@@ -36,7 +37,7 @@ public:
 
     void Render(DX::DeviceResources* deviceResources);
 
-    void CreateTexture(DX::DeviceResources* DR);
+  
 
 private:
     int    m_width = 0;
@@ -49,7 +50,8 @@ private:
     // UAV output texture (written by compute shader, copied to back buffer)
     Microsoft::WRL::ComPtr<D3D12MA::Allocation>   m_outputTextureAllocation;
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_outputTexture;
-
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation>   m_backBufferAllocation;
+	Microsoft::WRL::ComPtr<ID3D12Resource>        m_backBuffer;
     // Structured buffer holding triangle vertices (SRV t0)
     Microsoft::WRL::ComPtr<D3D12MA::Allocation>   m_vertexBufferAllocation;
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_vertexBufferResource;
@@ -63,12 +65,21 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource>        m_fallbackTexture;
 
     // Combined CBV_SRV_UAV descriptor heap
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>  m_descriptorHeap;
-    UINT m_descriptorSize = 0;
 
     std::unique_ptr<DirectX::DescriptorHeap> resourceDescriptors;
+     D3D12MA::Allocator* m_allocator = nullptr;
 	std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
-    DirectX::GraphicsResource m_vertexBuffer;
+	//定数バッファのデータ
+	CBData m_cbData;
+    // ---------------------------------------------------
+// 変更後：D3D12MAによるリソース管理
+// ---------------------------------------------------
+
+
+    // 定数バッファ用
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation>   m_constantBufferAllocation;
+    Microsoft::WRL::ComPtr<ID3D12Resource>        m_constantBufferResource;
+    void* m_cbvDataBegin = nullptr; // CPUから書き込むためのマップポインタ
     // Descriptor heap slot indices
     enum DescriptorIndex : int
     {
