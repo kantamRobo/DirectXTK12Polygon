@@ -67,7 +67,8 @@ private:
     UINT m_descriptorSize = 0;
 
     std::unique_ptr<DirectX::DescriptorHeap> resourceDescriptors;
-
+	std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
+    DirectX::GraphicsResource m_vertexBuffer;
     // Descriptor heap slot indices
     enum DescriptorIndex : int
     {

@@ -293,7 +293,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
                                                           IID_PPV_ARGS(&m_pipelineState)));
     m_pipelineState->SetName(L"ComputeRasterizerPipeline");
 
-    
+	m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(device, 0);
   
 
     // ------------------------------------------------------------------
@@ -309,13 +309,13 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     const UINT vbSize = sizeof(triangleVertices);
     {
         
-		m_VertexBuffer = graphicsMemory->Allocate(vbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+		m_vertexBuffer = m_graphicsMemory->Allocate(vbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         
        
 
        
        
-        memcpy(m_VertexBuffer.Memory(), triangleVertices, vbSize);
+        memcpy(m_vertexBuffer.Memory(), triangleVertices, vbSize);
        
     }
     // ==================================================
