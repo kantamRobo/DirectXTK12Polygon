@@ -18,141 +18,93 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 
-void DirectXTK12_ComputeRasterizer::CreateTexture(DX::DeviceResources* DR)
+// 宣言の変更を前提とします: 
+// void CreateTexture(D3D12MA::Allocator* allocator, DX::DeviceResources* DR);
+
+void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator, DX::DeviceResources* DR)
 {
     auto device = DR->GetD3DDevice();
-    auto commandQueue = DR->GetCommandQueue();
 
-    // 1. DirectXTex を用いて画像ファイルを読み込む
-    DirectX::TexMetadata metadata;
-    DirectX::ScratchImage image;
-    /*
-      struct DIRECTX_TEX_API TexMetadata
-    {
-        size_t          width;
-        size_t          height;     // Should be 1 for 1D textures
-        size_t          depth;      // Should be 1 for 1D or 2D textures
-        size_t          arraySize;  // For cubemap, this is a multiple of 6
-        size_t          mipLevels;
-        uint32_t        miscFlags;
-        uint32_t        miscFlags2;
-        DXGI_FORMAT     format;
-        TEX_DIMENSION   dimension;
+    // --------------------------------------------------
+    // 1. 絵を描く（データの準備：1x1の真っ白なピクセル）
+    // --------------------------------------------------
+    uint32_t whitePixel = 0xFFFFFFFF; // RGBA全て最大値(白)
 
-        size_t __cdecl ComputeIndex(size_t mip, size_t item, size_t slice) const noexcept;
-            // Returns size_t(-1) to indicate an out-of-range error
+    D3D12_SUBRESOURCE_DATA initData = {};
+    initData.pData = &whitePixel;
+    initData.RowPitch = sizeof(uint32_t);
+    initData.SlicePitch = sizeof(uint32_t);
 
-        bool __cdecl IsCubemap() const noexcept { return (miscFlags & TEX_MISC_TEXTURECUBE) != 0; }
-            // Helper for miscFlags
+    // --------------------------------------------------
+    // 2. キャンバスの用意（D3D12MAによるリソースの確保）
+    // --------------------------------------------------
+    CD3DX12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1);
 
-        bool __cdecl IsPMAlpha() const noexcept { return ((miscFlags2 & TEX_MISC2_ALPHA_MODE_MASK) == TEX_ALPHA_MODE_PREMULTIPLIED) != 0; }
-        void __cdecl SetAlphaMode(TEX_ALPHA_MODE mode) noexcept { miscFlags2 = (miscFlags2 & ~static_cast<uint32_t>(TEX_MISC2_ALPHA_MODE_MASK)) | static_cast<uint32_t>(mode); }
-        TEX_ALPHA_MODE __cdecl GetAlphaMode() const noexcept { return static_cast<TEX_ALPHA_MODE>(miscFlags2 & TEX_MISC2_ALPHA_MODE_MASK); }
-            // Helpers for miscFlags2
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
-        bool __cdecl IsVolumemap() const noexcept { return (dimension == TEX_DIMENSION_TEXTURE3D); }
-            // Helper for dimension
+    DX::ThrowIfFailed(allocator->CreateResource(
+        &allocDesc,
+        &texDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST, // まずは搬入先の状態として作成
+        nullptr,
+        m_fallbackTextureAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_fallbackTexture.ReleaseAndGetAddressOf())
+    ));
 
-        uint32_t __cdecl CalculateSubresource(size_t mip, size_t item) const noexcept;
-        uint32_t __cdecl CalculateSubresource(size_t mip, size_t item, size_t plane) const noexcept;
-            // Returns size_t(-1) to indicate an out-of-range error
-    };
-    */
-  /*
-  struct Image
-{
-    size_t      width;
-    size_t      height;
-    DXGI_FORMAT format;
-    size_t      rowPitch;
-    size_t      slicePitch;
-    uint8_t*    pixels;
-}
-  */
-	metadata.width = 512;
-	metadata.height = 512;
-	metadata.depth = 1;
-	metadata.arraySize = 1;
-	metadata.mipLevels = 1;
-	metadata.miscFlags = 0;
-	metadata.miscFlags2 = 0;
-	metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-	metadata.SetAlphaMode(TEX_ALPHA_MODE_OPAQUE);
-
-    // 2. テクスチャリソース(ID3D12Resource)の作成
-    DX::ThrowIfFailed(
-        DirectX::CreateTexture(
-            device,
-            metadata,
-            m_outputTexture.ReleaseAndGetAddressOf()
-        )
-    );
-
-    // 3. アップロード用のサブリソースデータを準備する
-    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
-    DX::ThrowIfFailed(
-        DirectX::PrepareUpload(
-            device,
-            image.GetImages(),
-            image.GetImageCount(),
-            metadata,
-            subresources
-        )
-    );
-
-    // 4. ResourceUploadBatch を使用して GPU へデータをアップロード
-    ResourceUploadBatch resourceUpload(device);
+    // --------------------------------------------------
+    // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
+    // --------------------------------------------------
+    DirectX::ResourceUploadBatch resourceUpload(device);
     resourceUpload.Begin();
 
+    // ① 作品の搬入指示
     resourceUpload.Upload(
-		m_outputTexture.Get(),
+        m_fallbackTexture.Get(),
         0,
-        subresources.data(),
-        static_cast<UINT>(subresources.size())
+        &initData,
+        1
     );
 
-    // リソースステートをシェーダーリソースに移行
+    // ② 設営（状態遷移）の指示
+    // ※注意: コンピュートシェーダーで読み取るため NON_PIXEL_SHADER_RESOURCE を指定します
     resourceUpload.Transition(
-        tex.Get(),
+        m_fallbackTexture.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
     );
 
-    // アップロードを実行し、完了まで待機
-    auto uploadResourcesFinished = resourceUpload.End(commandQueue);
-    uploadResourcesFinished.wait();
+    // ③ 指示書の提出と、作業完了の待機
+    auto uploadFinished = resourceUpload.End(DR->GetCommandQueue());
+    uploadFinished.wait();
 
-    // 5. SRV (Shader Resource View) の作成
-    // DirectXTK12の DirectXHelpers にある CreateShaderResourceView ヘルパー関数を利用して記述を簡略化
-    DirectX::CreateShaderResourceView(
-        device,
-        tex.Get(),
-        resourceDescriptors->GetCpuHandle(0)
-    );
+    // --------------------------------------------------
+    // 4. キャプションの設置（SRVの作成）
+    // --------------------------------------------------
+    // ※前提: m_descriptorHeap および m_descriptorSize が初期化済みであること
+    if (m_descriptorHeap)
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = texDesc.Format;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
 
+        // ヘッダで定義されている DescriptorIndex::SRV_Texture (t1) の位置にSRVを作成
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
+            m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+            DescriptorIndex::SRV_Texture,
+            m_descriptorSize
+        );
 
-    // 6. サンプラーの作成 (既存コードのまま)
-    D3D12_SAMPLER_DESC desc = {
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        0,
-        D3D12_MAX_MAXANISOTROPY,
-        D3D12_COMPARISON_FUNC_NEVER,
-        { 0, 0, 0, 0 },
-        0,
-        D3D12_FLOAT32_MAX
-    };
-
-    // ヒープの0番目に書き込む
-    device->CreateSampler(
-        &desc,
-        resourceDescriptors->GetCpuHandle(0)
-    );
+        device->CreateShaderResourceView(m_fallbackTexture.Get(), &srvDesc, srvHandle);
+    }
+    else
+    {
+        OutputDebugStringA("Warning: Descriptor heap is not initialized before CreateTexture.\n");
+    }
 }
-
 //ディスクリプタヒープ内の配置
 // UAV (u0) - 出力テクスチャ
 // SRV (t0) - 頂点バッファ (StructuredBuffer<Vertex>)
@@ -292,11 +244,11 @@ static void CreateDescriptorViews(
 }
 
 void DirectXTK12_ComputeRasterizer::Initialize(
-    DirectX::GraphicsMemory* graphicsMemory,
+    D3D12MA::Allocator* allocator,
     DX::DeviceResources*     deviceResources,
     int width, int height)
 {
-    m_graphicsMemory = graphicsMemory;
+   
     m_width          = width;
     m_height         = height;
 
@@ -341,14 +293,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
                                                           IID_PPV_ARGS(&m_pipelineState)));
     m_pipelineState->SetName(L"ComputeRasterizerPipeline");
 
-    // ------------------------------------------------------------------
-    // 4. Create UAV output texture (same format as back buffer)
-    // ------------------------------------------------------------------
-    {
     
-      
-    }
-
   
 
     // ------------------------------------------------------------------
@@ -373,59 +318,67 @@ void DirectXTK12_ComputeRasterizer::Initialize(
         memcpy(m_VertexBuffer.Memory(), triangleVertices, vbSize);
        
     }
+    // ==================================================
+        // 1x1 フォールバックテクスチャ（白）の作成 (D3D12MA使用)
+        // ==================================================
 
-    // ------------------------------------------------------------------
-    // 7. Create 1x1 white fallback texture using DirectXTex CreateTexture + TexMetadata
-    // ------------------------------------------------------------------
+        // 1. 絵を描く（データ準備：1x1の真っ白なピクセル）
+    uint32_t whitePixel = 0xFFFFFFFF;
+    D3D12_SUBRESOURCE_DATA initData = {};
+    initData.pData = &whitePixel;
+    initData.RowPitch = sizeof(uint32_t);
+    initData.SlicePitch = sizeof(uint32_t);
+
+    // 2. キャンバスの用意（D3D12MAによるリソース確保）
+    CD3DX12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1);
+
+    D3D12MA::ALLOCATION_DESC allocDesc = {};
+    allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+
+    DX::ThrowIfFailed(allocator->CreateResource(
+        &allocDesc,
+        &texDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        m_fallbackTextureAllocation.ReleaseAndGetAddressOf(),
+        IID_PPV_ARGS(m_fallbackTexture.ReleaseAndGetAddressOf())
+    ));
+
+    // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
+    DirectX::ResourceUploadBatch resourceUpload(device);
+    resourceUpload.Begin();
+
+    // 搬入
+    resourceUpload.Upload(m_fallbackTexture.Get(), 0, &initData, 1);
+
+    // 設営（コンピュートシェーダー用のため NON_PIXEL_SHADER_RESOURCE）
+    resourceUpload.Transition(
+        m_fallbackTexture.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+    );
+
+    auto uploadFinished = resourceUpload.End(deviceResources->GetCommandQueue());
+    uploadFinished.wait();
+
+    // 4. キャプションの設置（SRVの作成）
+    if (m_descriptorHeap)
     {
-        // Prepare metadata describing a 1x1 RGBA8 texture
-        DirectX::TexMetadata fbMeta = {};
-        fbMeta.width = 1;
-        fbMeta.height = 1;
-        fbMeta.depth = 1;
-        fbMeta.arraySize = 1;
-        fbMeta.mipLevels = 1;
-        fbMeta.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        fbMeta.dimension = TEX_DIMENSION_TEXTURE2D;
-        fbMeta.SetAlphaMode(TEX_ALPHA_MODE_OPAQUE);
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = texDesc.Format;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
 
-        // Create the GPU resource via DirectXTex helper
-        DX::ThrowIfFailed(
-            DirectX::CreateTexture(
-                device,
-                fbMeta,
-                m_fallbackTexture.ReleaseAndGetAddressOf()
-            )
-        );
-        m_fallbackTexture->SetName(L"ComputeRasterizerFallbackTexture");
-
-        // Prepare a single D3D12_SUBRESOURCE_DATA containing a white pixel
-        const uint32_t whitePixel = 0xFFFFFFFFu; // RGBA = 255,255,255,255
-        D3D12_SUBRESOURCE_DATA subresource = {};
-        subresource.pData = &whitePixel;
-        subresource.RowPitch = sizeof(whitePixel);
-        subresource.SlicePitch = sizeof(whitePixel);
-
-        // Upload using ResourceUploadBatch (handles upload buffer creation internally)
-        ResourceUploadBatch resourceUpload(device);
-        resourceUpload.Begin();
-
-        resourceUpload.Upload(
-            m_fallbackTexture.Get(),
-            0,
-            &subresource,
-            1
+        // t1レジスタ相当の SRV_Texture スロットに登録
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
+            m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+            DescriptorIndex::SRV_Texture,
+            m_descriptorSize
         );
 
-        // Transition to NON_PIXEL_SHADER_RESOURCE for compute usage (matching previous code)
-        resourceUpload.Transition(
-            m_fallbackTexture.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-        );
-
-        auto uploadDone = resourceUpload.End(commandQueue);
-        uploadDone.wait();
+        device->CreateShaderResourceView(m_fallbackTexture.Get(), &srvDesc, srvHandle);
     }
 
 	//コンピュートシェーダー・頂点・フォールバックテクスチャ用のディスクリプタヒープを作成
