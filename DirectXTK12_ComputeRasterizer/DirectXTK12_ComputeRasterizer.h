@@ -27,7 +27,7 @@ class DirectXTK12_ComputeRasterizer
 {
 public:
     void Initialize(
-		
+		DirectX::GraphicsMemory* graphicsMemory,
         DX::DeviceResources* deviceResources,
         int width, int height);
 

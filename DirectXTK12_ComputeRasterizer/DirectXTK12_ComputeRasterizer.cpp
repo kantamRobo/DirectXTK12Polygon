@@ -23,79 +23,37 @@ using Microsoft::WRL::ComPtr;
 
 void DirectXTK12_ComputeRasterizer::CreateTexture(D3D12MA::Allocator* allocator, DX::DeviceResources* DR)
 {
-    auto device = DR->GetD3DDevice();
+    // --------------------------------------------------
+    // コンピュートシェーダーの出力先（UAV）としてのテクスチャ確保
+    // ※白ピクセルの転送、バリア遷移、バックバッファの自前作成は一切不要
+    // --------------------------------------------------
 
-    // --------------------------------------------------
-    // 1. 絵を描く（データの準備：1x1の真っ白なピクセル）
-    // --------------------------------------------------
-    uint32_t whitePixel = 0xFFFFFFFF; // RGBA全て最大値(白)
-
-    D3D12_SUBRESOURCE_DATA initData = {};
-    initData.pData = &whitePixel;
-    initData.RowPitch = sizeof(uint32_t);
-    initData.SlicePitch = sizeof(uint32_t);
-
-    // --------------------------------------------------
-    // 2. キャンバスの用意（D3D12MAによるリソースの確保）
-    // --------------------------------------------------
+    // 1. 1x1ではなく、実際の画面サイズ(m_width, m_height)に合わせてリソースを定義
+    // コンピュートシェーダーから書き込めるように ALLOW_UNORDERED_ACCESS フラグを立てる
     CD3DX12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);  
+        DR->GetBackBufferFormat(),
+        static_cast<UINT>(m_width),
+        static_cast<UINT>(m_height),
+        1, 1, 1, 0,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    );
 
     D3D12MA::ALLOCATION_DESC allocDesc = {};
     allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
+    // 2. 毎フレームコンピュートシェーダーが直接書き込みを行うため、
+    // 生成時の初期状態を D3D12_RESOURCE_STATE_UNORDERED_ACCESS に指定する
     DX::ThrowIfFailed(allocator->CreateResource(
         &allocDesc,
         &texDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, // まずは搬入先の状態として作成
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, // 必須：UAVとしての初期状態
         nullptr,
         m_outputTextureAllocation.ReleaseAndGetAddressOf(),
         IID_PPV_ARGS(m_outputTexture.ReleaseAndGetAddressOf())
     ));
-	m_outputTexture->SetName(L"OutputTexture");
-    CD3DX12_RESOURCE_DESC backbufferDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1, 1, 0,D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 
-    //バックバッファの用意
-	D3D12MA::ALLOCATION_DESC backBufferAllocDesc = {};
-	backBufferAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-	//バックバッファはレンダーターゲットとして使用するため、ALLOW_RENDER_TARGETフラグを追加
-
-    //バックバッファはテクスチャの書き込み先として使用する
-    DX::ThrowIfFailed(allocator->CreateResource(
-        &backBufferAllocDesc,
-        &backbufferDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        m_backBufferAllocation.ReleaseAndGetAddressOf(),
-        IID_PPV_ARGS(m_backBuffer.ReleaseAndGetAddressOf())
-	));
-	m_backBuffer->SetName(L"BackBuffer");
-    // --------------------------------------------------
-    // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
-    // --------------------------------------------------
-    DirectX::ResourceUploadBatch resourceUpload(device);
-    resourceUpload.Begin();
-
-    // ① 作品の搬入指示
-    resourceUpload.Upload(
-        m_outputTexture.Get(),
-        0,
-        &initData,
-        1
-    );
-
-    // ② 設営（状態遷移）の指示
-    // ※注意: コンピュートシェーダーで読み取るため NON_PIXEL_SHADER_RESOURCE を指定します
-    resourceUpload.Transition(
-        m_outputTexture.Get(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-    );
-
-    // ③ 指示書の提出と、作業完了の待機
-    auto uploadFinished = resourceUpload.End(DR->GetCommandQueue());
-    uploadFinished.wait();
+    // 3. デバッグ時に PIX や検証レイヤーで追跡しやすくするため、名前を設定
+    m_outputTexture->SetName(L"OutputTexture");
 }
 //ディスクリプタヒープ内の配置
 // UAV (u0) - 出力テクスチャ
@@ -232,7 +190,7 @@ static void CreateDescriptorViews(
 
 void DirectXTK12_ComputeRasterizer::Initialize(
    
-	
+	DirectX::GraphicsMemory* graphicsMemory,
     DX::DeviceResources*     deviceResources,
     int width, int height)
 {
@@ -243,8 +201,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     auto device       = deviceResources->GetD3DDevice();
     auto commandQueue = deviceResources->GetCommandQueue();
 	auto adapter = deviceResources->adapter.Get(); // 追加: IDXGIAdapterを取得
-    m_graphicsMemory = std::make_unique<DirectX::GraphicsMemory>(device);
-
+  
     // ------------------------------------------------------------------
     // 1. Compile compute shader at runtime
     // ------------------------------------------------------------------
@@ -365,7 +322,7 @@ void DirectXTK12_ComputeRasterizer::Initialize(
     initData.SlicePitch = sizeof(uint32_t);
 
     // 2. キャンバスの用意（D3D12MAによるリソース確保）
-    CD3DX12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+    CD3DX12_RESOURCE_DESC fallbacktexDesc = CD3DX12_RESOURCE_DESC::Tex2D(
         DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1);
 
     D3D12MA::ALLOCATION_DESC allocDesc = {};
@@ -373,12 +330,13 @@ void DirectXTK12_ComputeRasterizer::Initialize(
 
     DX::ThrowIfFailed(allocator->CreateResource(
         &allocDesc,
-        &texDesc,
+        &fallbacktexDesc,
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
         m_fallbackTextureAllocation.ReleaseAndGetAddressOf(),
         IID_PPV_ARGS(m_fallbackTexture.ReleaseAndGetAddressOf())
     ));
+	m_fallbackTexture->SetName(L"FallbackTexture");
     
     // 3. アトリエから美術館へ搬入（アップロードと状態遷移）
     DirectX::ResourceUploadBatch resourceUpload(device);
@@ -480,7 +438,7 @@ void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
     cbData.triangleCount = m_triangleCount;
     cbData.padding = 0.0f;
 
-    // 正解：Map済みのCPUポインタに対してmemcpyを行う
+    // Map済みのCPUポインタに対してmemcpyを行う
     memcpy(m_cbvDataBegin, &cbData, sizeof(CBData));
 
     // ------------------------------------------------------------------
@@ -500,11 +458,17 @@ void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
     commandList->SetComputeRootConstantBufferView(2, m_constantBufferResource->GetGPUVirtualAddress());
 
     // ------------------------------------------------------------------
-    // Dispatch & Resource Barriers (以降は前回修正済みの正しいバリア処理)
+    // Dispatch
     // ------------------------------------------------------------------
     const UINT dispatchX = (static_cast<UINT>(m_width) + 15) / 16;
     const UINT dispatchY = (static_cast<UINT>(m_height) + 15) / 16;
     commandList->Dispatch(dispatchX, dispatchY, 1);
+
+    // ------------------------------------------------------------------
+    // Resource Barriers & Copy
+    // ------------------------------------------------------------------
+    // スワップチェインから「現在の本物のバックバッファ」を取得する
+    ID3D12Resource* currentBackBuffer = deviceResources->GetRenderTarget();
 
     auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_outputTexture.Get());
     commandList->ResourceBarrier(1, &uavBarrier);
@@ -514,18 +478,21 @@ void DirectXTK12_ComputeRasterizer::Render(DX::DeviceResources* deviceResources)
             m_outputTexture.Get(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE),
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_backBuffer.Get(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_COPY_DEST)
+            // m_backBuffer ではなく currentBackBuffer を指定
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                currentBackBuffer,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_COPY_DEST)
     };
     commandList->ResourceBarrier(2, transitionBarriers);
 
-    commandList->CopyResource(m_backBuffer.Get(), m_outputTexture.Get());
+    // m_backBuffer ではなく currentBackBuffer にコピー
+    commandList->CopyResource(currentBackBuffer, m_outputTexture.Get());
 
     D3D12_RESOURCE_BARRIER returnBarriers[2] = {
+        // m_backBuffer ではなく currentBackBuffer を元の状態へ戻す
         CD3DX12_RESOURCE_BARRIER::Transition(
-            m_backBuffer.Get(),
+            currentBackBuffer,
             D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_RENDER_TARGET),
         CD3DX12_RESOURCE_BARRIER::Transition(

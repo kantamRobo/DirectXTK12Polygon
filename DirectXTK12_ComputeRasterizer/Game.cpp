@@ -15,6 +15,7 @@ Game::Game() noexcept(false)
     // Use R8G8B8A8_UNORM so the output UAV texture format is guaranteed
     // to support typed UAV stores on all DX12 hardware.
     m_deviceResources = std::make_unique<DX::DeviceResources>(DXGI_FORMAT_R8G8B8A8_UNORM);
+  
     m_deviceResources->RegisterDeviceNotify(this);
 }
 
@@ -154,11 +155,11 @@ void Game::CreateDeviceDependentResources()
     auto device = m_deviceResources->GetD3DDevice();
 
     // Initialize GraphicsMemory
-   // m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device);
 
     // Initialize the compute rasterizer
     m_computeRasterizer = std::make_unique<DirectXTK12_ComputeRasterizer>();
-	m_computeRasterizer->Initialize( m_deviceResources.get(), m_width, m_height);
+	m_computeRasterizer->Initialize( m_graphicsMemory.get(), m_deviceResources.get(), m_width, m_height);
 }
 
 // Allocate all memory resources that change on a window SizeChanged event.
